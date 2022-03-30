@@ -5,7 +5,7 @@ from scipy.optimize import minimize
 
 class rInvGaussMixture:
 
-    def __init__(self, n_components=None, max_iter=100, tol=1e-2, modes=None, shapes=None, weights=None):
+    def __init__(self, n_components=None, max_iter=100, tol=1e-4, modes=None, shapes=None, weights=None):
         if n_components:
             self._n_components = n_components
         elif modes:
@@ -98,7 +98,7 @@ class rInvGaussMixture:
                          for i, x_i in enumerate(X)]) for j in range(self._n_components)])
 
     def score_sample(self, X):
-        return [sum([self.weights_[j] * self.log_invGauss_pdf(x_i, self.modes_[j], self.shapes_[j])
+        return [sum([self.weights_[j] * self.invGauss_pdf(x_i, self.modes_[j], self.shapes_[j])
                      for j in range(self._n_components)]) for i, x_i in enumerate(X)]
 
     def score(self, X):
@@ -107,13 +107,15 @@ class rInvGaussMixture:
     def _EM(self, X, verbose=False):
         z = numpy.ones((len(X), self._n_components))
         self.weights_ = numpy.mean(z, axis=0)
-        self.modes_ = [numpy.mean(X)] * self._n_components
+        self.modes_ = numpy.random.randint(1, 100, self._n_components)
         self.shapes_ = [1] * self._n_components
         likelihood = self._score_complete(X, z)
         max_iter = self.n_iter_
+        old_l = 0
 
         while not self.converged_ and max_iter > 0:
             max_iter -= 1
+            old_likelihood = old_l
             old_l = likelihood
             # E-step
             z = self._update_weights(X, z)
@@ -124,7 +126,8 @@ class rInvGaussMixture:
                 self.modes_[j], self.shapes_[j] = self._update_params(X, z[:, j], (self.modes_[j], self.shapes_[j]))
 
             likelihood = self._score_complete(X, z)
-            self.converged_ = (likelihood - old_l < self.tol)
+            aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
+            self.converged_ = abs((likelihood - old_l)/(1-aitken_acceleration)) < self.tol
 
         if verbose:
             if self.converged_:
@@ -179,7 +182,7 @@ class rInvGaussMixture:
 if __name__ == '__main__':
     sample = rInvGaussMixture(modes=[10, 50], weights=[0.4, 0.6], shapes=[1, 1]).sample(10000)
     print(sample.shape)
-    model = rInvGaussMixture(2, tol=1e-3).fit(sample, verbose=True)
+    model = rInvGaussMixture(2).fit(sample, verbose=True)
     print(model.get_params())
     #y = model._second_derivative_complete_likelihood(sample, [1]*len(sample), 1, 1)
     #print(y)
