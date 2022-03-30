@@ -1,10 +1,6 @@
-import matplotlib.pyplot as plt
-import numpy as np
-import seaborn as sns
-import pandas as pd
-import os
+import numpy
 from math import sqrt, log, exp
-from scipy.optimize import fmin_bfgs, minimize
+from scipy.optimize import minimize
 
 
 class rInvGaussMixture:
@@ -30,12 +26,12 @@ class rInvGaussMixture:
         return theta * (3 * gamma + theta) / gamma
 
     def invGauss_pdf(self, x, theta, gamma):
-        a1 = sqrt(self.lambd(theta, gamma) / (2 * np.pi * x**3))
+        a1 = sqrt(self.lambd(theta, gamma) / (2 * numpy.pi * x**3))
         a2 = self.lambd(theta, gamma) * (x - self.mu(theta, gamma)) / (x * self.mu(theta, gamma)**2)
         return a1 * exp(-a2/2)
 
     def log_invGauss_pdf(self, x, theta, gamma):
-        a1 = log(self.lambd(theta, gamma))/2 - log(2 * np.pi * x ** 3)
+        a1 = log(self.lambd(theta, gamma))/2 - log(2 * numpy.pi * x ** 3)
         a2 = self.lambd(theta, gamma) * (x - self.mu(theta, gamma)) / (x * self.mu(theta, gamma) ** 2)
         return a1 - a2/2
 
@@ -57,7 +53,7 @@ class rInvGaussMixture:
                      - theta/(2*gamma*p) \
                      + 3*sqrt(theta)/(2*gamma*sqrt(p)) \
                      - sqrt(theta*p)/gamma**2
-        return np.array([dLL_dtheta, dLL_dgamma])
+        return numpy.array([dLL_dtheta, dLL_dgamma])
 
     def _hesslogf(self, x, theta, gamma):
         p = 3*gamma+theta
@@ -73,21 +69,21 @@ class rInvGaussMixture:
                                 + 4*theta**3 \
                                 + 3*gamma**2 * (21*theta + 2*sqrt(theta*p)))\
                               / (4*gamma**2*sqrt(theta*p**5))
-        return np.matrix([[dLL_dtheta2, dLL_dtheta_dgamma], [dLL_dtheta_dgamma, dLL_dgamma2]])
+        return numpy.matrix([[dLL_dtheta2, dLL_dtheta_dgamma], [dLL_dtheta_dgamma, dLL_dgamma2]])
 
     def _complete_likelihood(self, X, z, theta, gamma):
         return sum([z[i] * self.log_invGauss_pdf(x_i, theta, gamma) for i, x_i in enumerate(X)])
 
     def _derivative_complete_likelihood(self, X, z, theta, gamma):
-        return np.array([z[i] * self._dlogf(x_i, theta, gamma) for i, x_i in enumerate(X)]).sum(axis=0)
+        return numpy.array([z[i] * self._dlogf(x_i, theta, gamma) for i, x_i in enumerate(X)]).sum(axis=0)
 
     def _second_derivative_complete_likelihood(self, X, z, theta, gamma):
         return sum([z[i] * self._hesslogf(x_i, theta, gamma) for i, x_i in enumerate(X)])
 
     def _update_weights(self, X, z):
-        z = np.zeros(z.shape)
+        z = numpy.zeros(z.shape)
         for i, x_i in enumerate(X):
-            z[i, :] = np.array(self._proba_components(x_i)) / self.pdf(x_i)
+            z[i, :] = numpy.array(self._proba_components(x_i)) / self.pdf(x_i)
         return z
 
     def _update_params(self, X, z, x0):
@@ -109,9 +105,9 @@ class rInvGaussMixture:
         return sum(self.score_sample(X))
 
     def _EM(self, X, verbose=False):
-        z = np.ones((len(X), self._n_components))
-        self.weights_ = np.mean(z, axis=0)
-        self.modes_ = [np.mean(X)] * self._n_components
+        z = numpy.ones((len(X), self._n_components))
+        self.weights_ = numpy.mean(z, axis=0)
+        self.modes_ = [numpy.mean(X)] * self._n_components
         self.shapes_ = [1] * self._n_components
         likelihood = self._score_complete(X, z)
         max_iter = self.n_iter_
@@ -123,7 +119,7 @@ class rInvGaussMixture:
             z = self._update_weights(X, z)
 
             # M-step
-            self.weights_ = np.mean(z, axis=0).tolist()
+            self.weights_ = numpy.mean(z, axis=0).tolist()
             for j in range(self._n_components):
                 self.modes_[j], self.shapes_[j] = self._update_params(X, z[:, j], (self.modes_[j], self.shapes_[j]))
 
@@ -145,29 +141,29 @@ class rInvGaussMixture:
         return 2 * len(X) * self.score(X) - (3 * self._n_components - 1) * 2
 
     def bic(self, X):
-        return 2 * len(X) * self.score(X) - (3 * self._n_components - 1) * np.log(len(X))
+        return 2 * len(X) * self.score(X) - (3 * self._n_components - 1) * numpy.log(len(X))
 
     def predict_proba(self, X):
         return [self._proba_components(x) for x in X]
 
     def predict(self, X):
-        return [np.argmax(self._proba_components(x)) for x in X]
+        return [numpy.argmax(self._proba_components(x)) for x in X]
 
     def fit_predict(self, X, y=None):
         return self.fit(X).predict(X)
 
     def sample(self, n_sample=1):
         # https://fr.wikipedia.org/wiki/Loi_inverse-gaussienne#Simulation_num%C3%A9rique_de_la_loi_inverse-gaussienne
-        clusters_ = np.random.choice(a=range(self._n_components), p=self.weights_, size=n_sample)
-        mu = np.zeros(n_sample)
-        lambd = np.zeros(n_sample)
+        clusters_ = numpy.random.choice(a=range(self._n_components), p=self.weights_, size=n_sample)
+        mu = numpy.zeros(n_sample)
+        lambd = numpy.zeros(n_sample)
         for i, k in enumerate(clusters_):
             mu[i] = self.mu(self.modes_[k], self.shapes_[k])
             lambd[i] = self.lambd(self.modes_[k], self.shapes_[k])
-        y = np.random.normal(size=n_sample)**2
-        X = mu + (mu**2 * y - mu * np.sqrt(4 * mu * lambd * y +mu**2 * y**2)) / (2 * lambd)
-        U = np.random.rand(n_sample)
-        S = np.zeros(n_sample)
+        y = numpy.random.normal(size=n_sample)**2
+        X = mu + (mu**2 * y - mu * numpy.sqrt(4 * mu * lambd * y +mu**2 * y**2)) / (2 * lambd)
+        U = numpy.random.rand(n_sample)
+        S = numpy.zeros(n_sample)
         Z = mu / (mu + X)
         ok = (U <= Z)
         notok = (U > Z)
@@ -188,7 +184,7 @@ if __name__ == '__main__':
     #y = model._second_derivative_complete_likelihood(sample, [1]*len(sample), 1, 1)
     #print(y)
 
-    #rt = np.array(RT[0])
+    #rt = numpy.array(RT[0])
     #bic_list = []
 
     #for k in range(1, 10):
