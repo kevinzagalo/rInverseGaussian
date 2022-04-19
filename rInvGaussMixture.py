@@ -134,15 +134,11 @@ class rInvGaussMixture:
             likelihood = self._score_complete(X, z)
             aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
             self.converged_ = abs((likelihood - old_l)/(1-aitken_acceleration)) < self.tol
-            #if self.converged_:
-            #    break
-
-        if verbose:
             if self.converged_:
                 print('Converged in {} iterations'.format(self.n_iter_ - max_iter))
-            else:
-                print('Not converged...')
+                return self
 
+        print('Not converged...')
         return self
 
     def fit(self, X, y=None, verbose=False):
