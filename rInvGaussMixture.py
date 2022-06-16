@@ -7,14 +7,20 @@ from sklearn.mixture._base import BaseMixture
 
 class rInvGaussMixture:
 
-    def __init__(self, n_components=None, max_iter=100, tol=1e-4, modes_init=None, shapes_init=None, weights_init=None):
+    def __init__(self, n_components=1, max_iter=100, tol=1e-4, modes_init=1., shapes_init=1., weights_init=None):
         self.tol = tol,
         self.n_iter_ = max_iter
 
-        if n_components:
+        if isinstance(n_components, int):
             self._n_components = n_components
-        elif modes_init:
-            self._n_components = len(modes_init)
+        if isinstance(modes_init, int) or isinstance(modes_init, float):
+            modes_init = [modes_init]
+        if isinstance(shapes_init, int) or isinstance(shapes_init, float):
+            shapes_init = [shapes_init]
+        if weights_init:
+            assert len(weights_init) == n_components, 'Weights lenghts should be equal to n_components'
+        else:
+            weights_init = [1./n_components] * n_components
 
         self.modes_ = modes_init
         self.shapes_ = shapes_init
@@ -29,7 +35,7 @@ class rInvGaussMixture:
 
     def invGauss_pdf(self, x, theta, gamma):
         a1 = sqrt(self.lambd(theta, gamma) / (2 * numpy.pi * x**3))
-        a2 = self.lambd(theta, gamma) * (x - self.mu(theta, gamma)) / (x * self.mu(theta, gamma)**2)
+        a2 = self.lambd(theta, gamma) * (x - self.mu(theta, gamma))**2 / (x * self.mu(theta, gamma)**2)
         return a1 * exp(-a2/2)
 
     def log_invGauss_pdf(self, x, theta, gamma):
@@ -159,6 +165,10 @@ class rInvGaussMixture:
     def fit_predict(self, X, y=None):
         return self.fit(X).predict(X)
 
+    def kde(self, X):
+        assert self._n_components == 1, 'Only for n_components = 1'
+        return lambda t: numpy.mean([self.invGauss_pdf(t, x, self.shapes_[0]) for x in X])
+
     def sample(self, n_sample=1):
         if n_sample < 1:
             raise ValueError(
@@ -190,12 +200,22 @@ class rInvGaussMixture:
 
 
 if __name__ == '__main__':
-    sample = rInvGaussMixture(modes_init=[10, 50], weights_init=[0.3, 0.7], shapes_init=[1, 2]).sample(100)
-    model = rInvGaussMixture(2).fit(sample, verbose=True)
-    print(model.get_parameters())
+    import matplotlib.pyplot as plt
+    model = rInvGaussMixture(modes_init=10)
+
+    sample = model.sample(10000)
+    #model = rInvGaussMixture(1).fit(sample, verbose=True)
     #y = model._second_derivative_complete_likelihood(sample, [1]*len(sample), 1, 1)
     #print(y)
+    t_range = numpy.linspace(1, 30)
+    plt.hist(sample, bins=50, density=True)
+    kernel_t_range = [model.kde(sample)(tt) for tt in t_range]
+    y = [model.pdf(tt) for tt in t_range]
+    print(model.get_parameters())
 
+    plt.plot(t_range, y)
+    plt.plot(t_range, kernel_t_range)
+    plt.show()
     #rt = numpy.array(RT[0])
     #bic_list = []
 
