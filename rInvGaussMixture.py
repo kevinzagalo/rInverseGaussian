@@ -1,3 +1,5 @@
+import os
+
 import numpy
 from math import sqrt, log, exp
 from scipy.optimize import minimize, fmin_bfgs
@@ -201,27 +203,32 @@ class rInvGaussMixture:
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    model = rInvGaussMixture(modes_init=10)
+    import pandas as pd
+    import os
+    #model = rInvGaussMixture(modes_init=10)
+    #print(os.curdir)
+    for f in os.listdir('./data'):
+        if '.csv' not in f:
+            continue
+        df_rtime = pd.read_csv('./data/'+f)
+        sample = df_rtime.rtime
 
-    sample = model.sample(10000)
-    #model = rInvGaussMixture(1).fit(sample, verbose=True)
-    #y = model._second_derivative_complete_likelihood(sample, [1]*len(sample), 1, 1)
-    #print(y)
-    t_range = numpy.linspace(1, 30)
-    plt.hist(sample, bins=50, density=True)
-    kernel_t_range = [model.kde(sample)(tt) for tt in t_range]
-    y = [model.pdf(tt) for tt in t_range]
-    print(model.get_parameters())
+        model = rInvGaussMixture()
 
-    plt.plot(t_range, y)
-    plt.plot(t_range, kernel_t_range)
-    plt.show()
-    #rt = numpy.array(RT[0])
-    #bic_list = []
+        t_range = numpy.linspace(1, max(sample))
+        plt.hist(sample, bins=50, density=True)
+        kernel_t_range = [model.kde(sample)(tt) for tt in t_range]
 
-    #for k in range(1, 10):
-    #    model = rInvGaussMixture(k).fit(rt)
-    #    bic_list.append(model.bic(rt))
+        #plt.plot(t_range, [model.pdf(tt) for tt in t_range])
+        plt.plot(t_range, kernel_t_range)
+        plt.title(f[:-4])
+        plt.show()
+        #rt = numpy.array(RT[0])
+        #bic_list = []
 
-    #plt.plot(bic_list)
-    #plt.show()
+        #for k in range(1, 10):
+        #    model = rInvGaussMixture(k).fit(rt)
+        #    bic_list.append(model.bic(rt))
+
+        #plt.plot(bic_list)
+        #plt.show()
