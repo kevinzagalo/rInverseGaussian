@@ -167,9 +167,13 @@ class rInvGaussMixture:
     def fit_predict(self, X, y=None):
         return self.fit(X).predict(X)
 
-    def kde(self, X):
+    def kde(self, X, gamma=None):
         assert self._n_components == 1, 'Only for n_components = 1'
-        return lambda t: numpy.mean([self.invGauss_pdf(t, x, self.shapes_[0]) for x in X])
+        if gamma:
+            pass
+        else:
+            gamma = self.shapes_[0]
+        return lambda t: numpy.mean([self.invGauss_pdf(t, x, gamma) for x in X])
 
     def sample(self, n_sample=1):
         if n_sample < 1:
