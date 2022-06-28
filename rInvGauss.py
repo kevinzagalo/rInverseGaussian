@@ -72,7 +72,7 @@ class rInvGauss:
         if gamma:
             pass
         else:
-            gamma = self.min_lcv(X)
+            gamma = self.gamma
         return lambda t: numpy.mean([self.pdf(t, x, gamma) for x in X])
 
     def lcv(self, X, gamma):
