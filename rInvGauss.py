@@ -80,7 +80,7 @@ class rInvGauss:
         return numpy.mean([log(self.kde(X[:i]+X[i+1:], gamma)(x)) for i, x in enumerate(X)])
 
     def min_lcv(self, X):
-        return fmin_bfgs(f=lambda g: self.lcv(X, g), x0=[1.0], disp=False)
+        return fmin_bfgs(f=lambda g: self.lcv(X, g), x0=numpy.array([1.0]), disp=False)[0]
 
     def sample(self, n_sample=1):
         if n_sample < 1:
@@ -118,10 +118,10 @@ if __name__ == '__main__':
     plt.title('A generated sample')
     plt.show()
 
-    #gamma_range = numpy.linspace(0.1, 5, 10)
-    #lcv = [rIG.lcv(sample, g) for g in gamma_range]
-    #plt.plot(gamma_range, lcv)
-    #plt.show()
+    gamma_range = numpy.linspace(0.1, 5, 10)
+    lcv = [rIG.lcv(sample, g) for g in gamma_range]
+    plt.plot(gamma_range, lcv)
+    plt.show()
 
     for f in os.listdir('./data'):
         if '.csv' not in f:
@@ -134,8 +134,7 @@ if __name__ == '__main__':
 
         t_range = numpy.linspace(1, max(sample))
         plt.hist(sample, bins=75, density=True)
-        kernel_t_range = [rInvGauss().kde(sample)(tt) for tt in t_range]
-
-        plt.plot(t_range, kernel_t_range)
+        #kernel_t_range = [rInvGauss().kde(sample)(tt) for tt in t_range]
+        #plt.plot(t_range, kernel_t_range)
         plt.title(f[:-4])
         plt.show()
