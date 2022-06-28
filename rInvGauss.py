@@ -80,8 +80,9 @@ class rInvGauss:
         return numpy.mean([log(self.kde(X[:i]+X[i+1:], gamma)(x)) for i, x in enumerate(X)])
 
     def min_lcv(self, X):
-        return fmin_bfgs(f=lambda g: self.lcv(X, g), x0=numpy.array([1.0]), disp=False)[0]
-
+        gamma = fmin_bfgs(f=lambda g: self.lcv(X, g), x0=numpy.array([1.0]), disp=False)[0]
+        return max((gamma, 0.001))
+    
     def sample(self, n_sample=1):
         if n_sample < 1:
             raise ValueError(
