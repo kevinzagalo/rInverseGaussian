@@ -6,21 +6,16 @@ from rInvGauss import rInvGauss
 
 class rInvGaussMixture:
 
-    def __init__(self, n_components=1, max_iter=100, tol=1e-4, modes_init=1., shapes_init=1., weights_init=None):
+    def __init__(self, n_components=1, max_iter=100, tol=1e-4, modes_init=None, shapes_init=None, weights_init=None):
         self.tol = tol,
         self.n_iter_ = max_iter
 
-        if isinstance(n_components, int):
-            self._n_components = n_components
-        if isinstance(modes_init, int) or isinstance(modes_init, float):
-            modes_init = [modes_init]
-        if isinstance(shapes_init, int) or isinstance(shapes_init, float):
-            shapes_init = [shapes_init]
         if weights_init:
-            assert len(weights_init) == n_components, 'Weights lenghts should be equal to n_components'
+            assert len(weights_init) == n_components, 'Weights lengths should be equal to n_components'
         else:
             weights_init = [1./n_components] * n_components
 
+        self._n_components = n_components
         self.modes_ = modes_init
         self.shapes_ = shapes_init
         self.weights_ = weights_init
@@ -130,8 +125,8 @@ class rInvGaussMixture:
         mu = numpy.zeros(n_sample)
         lambd = numpy.zeros(n_sample)
         for i, k in enumerate(clusters_):
-            mu[i] = rInvGauss()._mu(self.modes_[k], self.shapes_[k])
-            lambd[i] = rInvGauss()._lambd(self.modes_[k], self.shapes_[k])
+            mu[i] = rInvGauss(theta=self.modes_[k], gamma=self.shapes_[k]).mu
+            lambd[i] = rInvGauss(theta=self.modes_[k], gamma=self.shapes_[k]).lambd
         y = numpy.random.normal(size=n_sample)**2
         X = mu + (mu**2 * y - mu * numpy.sqrt(4 * mu * lambd * y +mu**2 * y**2)) / (2 * lambd)
         U = numpy.random.rand(n_sample)
@@ -153,13 +148,12 @@ if __name__ == '__main__':
     import pandas as pd
     import os
 
+    sample = rInvGaussMixture(2, [1, 10], [1, 1]).sample(1000)
     model = rInvGaussMixture(2).fit(sample)
-    #print(model.get_parameters())
+    print(model.get_parameters())
 
     t_range = numpy.linspace(1, max(sample))
     plt.hist(sample, bins=75, density=True)
-    kernel_t_range = [rInvGauss().kde(sample)(tt) for tt in t_range]
-
-    plt.plot(t_range, kernel_t_range)
+    plt.plot(t_range, model.pdf(t_range))
     plt.title(f[:-4])
     plt.show()
