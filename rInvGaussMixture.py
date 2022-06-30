@@ -62,41 +62,47 @@ class rInvGaussMixture:
 
     def _EM(self, XX, verbose=False):
         X = np.array(XX).copy()
-        kmeans = KMeans(self._n_components).fit(X.reshape(-1, 1))
-        self.modes_ = kmeans.cluster_centers_.reshape(-1)
-        self.shapes_ = [1.] * self._n_components
-        z = np.zeros((len(X), self._n_components))
-        for i, j in enumerate(kmeans.predict(X.reshape(-1, 1))):
-            z[i, j] = 1
-        self.weights_ = np.mean(z, axis=0).tolist()
-        likelihood = self._score_complete(X, z)
-        max_iter = self.n_iter_
-        old_l = 0
-
-        for _ in trange(self.n_iter_):
-            max_iter -= 1
-            old_likelihood = old_l
-            old_l = likelihood
-
-            # E-step
-            z = self._update_weights(X)
-
-            # M-step
+        if self._n_components > 1:
+            kmeans = KMeans(self._n_components).fit(X.reshape(-1, 1))
+            self.modes_ = kmeans.cluster_centers_.reshape(-1)
+            self.shapes_ = [1.] * self._n_components
+            z = np.zeros((len(X), self._n_components))
+            for i, j in enumerate(kmeans.predict(X.reshape(-1, 1))):
+                z[i, j] = 1
             self.weights_ = np.mean(z, axis=0).tolist()
-            for j in range(self._n_components):
-                self.modes_[j], self.shapes_[j] = self._update_params(X, z[:, j],
-                                                                      np.array((self.modes_[j], self.shapes_[j])))
-
-            # score
             likelihood = self._score_complete(X, z)
-            aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
-            self.converged_ = abs((likelihood - old_l)/(1-aitken_acceleration)) < self.tol
-            if self.converged_:
-                print('Converged in {} iterations'.format(self.n_iter_ - max_iter + 1))
-                return self
-        print('Not converged...')
-        return self
+            max_iter = self.n_iter_
+            old_l = 0
 
+            for _ in trange(self.n_iter_):
+                max_iter -= 1
+                old_likelihood = old_l
+                old_l = likelihood
+
+                # E-step
+                z = self._update_weights(X)
+
+                # M-step
+                self.weights_ = np.mean(z, axis=0).tolist()
+                for j in range(self._n_components):
+                    self.modes_[j], self.shapes_[j] = self._update_params(X, z[:, j],
+                                                                          np.array((self.modes_[j], self.shapes_[j])))
+
+                # score
+                likelihood = self._score_complete(X, z)
+                aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
+                self.converged_ = abs((likelihood - old_l)/(1-aitken_acceleration)) < self.tol
+                if self.converged_:
+                    print('Converged in {} iterations'.format(self.n_iter_ - max_iter + 1))
+                    return self
+            print('Not converged...')
+        elif self._n_components == 1:
+            uni = rInvGauss(max_iter=self.n_iter_, tol=self.tol).fit(X)
+            self.modes_ = [uni.theta]
+            self.shapes_ = [uni.gamma]
+            self.weights_ = [1.]
+        return self
+    
     def fit(self, X, y=None, verbose=False, method='EM'):
         return self._EM(X, verbose=verbose)
 

@@ -1,12 +1,15 @@
 import numpy
 from numpy import sqrt, log, exp
-from scipy.optimize import fmin_bfgs
+from scipy.optimize import minimize
+
 
 class rInvGauss:
 
-    def __init__(self, theta=1.0, gamma=1.0):
+    def __init__(self, theta=1.0, gamma=1.0, tol=1e-4, max_iter=100):
         self.theta = theta
         self.gamma = gamma
+        self._n_iter = max_iter
+        self.tol = tol
 
     def _mu(self, theta, gamma):
         return sqrt(theta * (3 * gamma + theta))
@@ -22,7 +25,8 @@ class rInvGauss:
 
     def _checkvalues(self):
         if self.theta and self.gamma:
-            assert self.theta > 0 and self.gamma > 0, 'theta = {} and gamma = {} must be positive'.format(self.theta, self.gamma)
+            assert self.theta > 0 and self.gamma > 0, \
+                'theta = {} and gamma = {} must be positive'.format(self.theta, self.gamma)
 
     @property
     def mu(self):
@@ -36,7 +40,6 @@ class rInvGauss:
 
     def pdf(self, x, theta=None, gamma=None):
         self._checkvalues()
-
         if theta and gamma:  # In case we want to use only the pdf without the object parameters
             mu = self._mu(theta, gamma)
             lambd = self._lambd(theta, gamma)
@@ -47,47 +50,95 @@ class rInvGauss:
         a2 = lambd * (x - mu)**2 / (x * mu**2)
         return a1 * exp(-a2/2)
 
-    def log_pdf(self, x):
+    def log_pdf(self, x, theta=None, gamma=None):
         self._checkvalues()
-
-        a1 = log(self.lambd)/2 - log(2) - log(numpy.pi) - 3 * log(x)
-        a2 = self.lambd * (x - self.mu)**2 / (x * self.mu**2)
+        if theta and gamma:  # In case we want to use only the pdf without the object parameters
+            mu = self._mu(theta, gamma)
+            lambd = self._lambd(theta, gamma)
+        else:  # in case we use the object parameters
+            mu = self.mu
+            lambd = self.lambd
+        a1 = log(lambd)/2 - log(2) - log(numpy.pi) - 3 * log(x)
+        a2 = lambd * (x - mu)**2 / (x * mu**2)
         return a1 - a2/2
 
-    def _dlogf(self, x):
+    def _dlogf(self, x, theta=None, gamma=None):
         self._checkvalues()
-
-        p = 3 * self.gamma + self.theta
+        if theta and gamma:
+            pass
+        else:
+            theta = self.theta
+            gamma = self.gamma
+        p = 3 * gamma + theta
         dLL_dtheta = - 1.5 / x \
-                     - self.theta / (x * self.gamma) \
+                     - theta / (x * gamma) \
                      + 1 / p \
-                     + 1.5 * self.gamma / (self.theta * p) \
-                     + sqrt(self.theta) / (2 * self.gamma * sqrt(p)) \
-                     + sqrt(p / self.theta) / (2 * self.gamma)
-        dLL_dgamma = x / (2 * self.gamma**2) \
-                     + self.theta**2 / (2 * x * self.gamma**2) \
-                     - self.theta / (2 * self.gamma * p) \
-                     + 1.5 * sqrt(self.theta) / (self.gamma * sqrt(p)) \
-                     - sqrt(self.theta * p) / self.gamma**2
+                     + 1.5 * gamma / (theta * p) \
+                     + sqrt(theta) / (2 * gamma * sqrt(p)) \
+                     + sqrt(p / theta) / (2 * gamma)
+        dLL_dgamma = x / (2 * gamma**2) \
+                     + theta**2 / (2 * x * gamma**2) \
+                     - theta / (2 * gamma * p) \
+                     + 1.5 * sqrt(theta) / (gamma * sqrt(p)) \
+                     - sqrt(theta * p) / gamma**2
         return numpy.array([dLL_dtheta, dLL_dgamma])
 
-    def _hesslogf(self, x):
+    def _hesslogf(self, x, theta=None, gamma=None):
         self._checkvalues()
-        p = 3 * self.gamma + self.theta
-        dLL_dtheta2 = -0.25 * (4 / (x * self.gamma) + 2 / (self.theta**2) + 2 / (p**2) + 9 * self.gamma / sqrt(self.theta * p)**3)
-        dLL_dgamma2 = -x / (self.gamma**3) \
-                      - self.theta**2 / (x * self.gamma**3) \
-                      + 1.5 * self.theta / (self.gamma * p**2) \
-                      - 9 * sqrt(self.theta) / (4 * self.gamma * sqrt(p)**3) \
-                      + self.theta / (2 * self.gamma**2 * p) \
-                      - 3 * sqrt(self.theta) / (self.gamma**2 * sqrt(p)) \
-                      + 2 * sqrt(self.theta * p) / self.gamma**3
-        dLL_dtheta_dgamma = self.theta / (x * self.gamma**2) \
-                            - (27 * self.gamma**3 + 30 * self.gamma * self.theta**2 \
-                               + 4 * self.theta**3 \
-                               + 3 * self.gamma**2 * (21 * self.theta + 2 * sqrt(self.theta * p))) \
-                            / (4 * self.gamma ** 2 * sqrt(self.theta * p**5))
-        return numpy.matrix([[dLL_dtheta2, dLL_dtheta_dgamma], [dLL_dtheta_dgamma, dLL_dgamma2]])
+        if theta and gamma:
+            pass
+        else:
+            theta = self.theta
+            gamma = self.gamma
+        p = 3 * gamma + theta
+        dLL_dtheta2 = -0.25 * (4 / (x * gamma) + 2 / (theta**2) + 2 / (p**2) + 9 * gamma / sqrt(theta * p)**3)
+        dLL_dgamma2 = -x / (gamma**3) \
+                      - theta**2 / (x * gamma**3) \
+                      + 1.5 * theta / (gamma * p**2) \
+                      - 9 * sqrt(theta) / (4 * gamma * sqrt(p)**3) \
+                      + theta / (2 * gamma**2 * p) \
+                      - 3 * sqrt(theta) / (gamma**2 * sqrt(p)) \
+                      + 2 * sqrt(theta * p) / gamma**3
+        dLL_dtheta_dgamma = theta / (x * gamma**2) \
+                            - (27 * gamma**3 + 30 * gamma * theta**2 \
+                               + 4 * theta**3 \
+                               + 3 * gamma**2 * (21 * theta + 2 * sqrt(theta * p))) \
+                            / (4 * gamma ** 2 * sqrt(theta * p**5))
+        M = numpy.matrix([[dLL_dtheta2, dLL_dtheta_dgamma], [dLL_dtheta_dgamma, dLL_dgamma2]])
+        return M
+
+    def score(self, X, y=None, theta=None, gamma=None):
+        return sum([self.log_pdf(x, theta, gamma) for x in X])
+
+    def _update_params(self, XX, x0):
+        hess_LL = lambda y: sum([-self._hesslogf(x, y[0], y[1]) for x in XX])
+        grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], y[1]) for x in XX]).sum(axis=0)
+        LL = lambda x: -self.score(XX, theta=x[0], gamma=x[1])
+        res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)
+        return res['x']
+
+    def fit(self, XX):
+        X = numpy.array(XX).copy()
+        likelihood = self.score(X)
+        max_iter = self._n_iter
+        old_l = 0
+
+        for _ in range(self._n_iter):
+            max_iter -= 1
+            old_likelihood = old_l
+            old_l = likelihood
+
+            self.theta, self.gamma = self._update_params(X, numpy.array((self.theta, self.gamma)))
+
+            # score
+            likelihood = self.score(X)
+            aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
+            self.converged_ = abs((likelihood - old_l) / (1 - aitken_acceleration)) < self.tol
+            if self.converged_:
+                print('Converged in {} iterations'.format(self._n_iter - max_iter + 1))
+                return self
+        print('Not converged...')
+        return self
 
     def kde(self, X, gamma=None):
         if gamma:
@@ -124,6 +175,7 @@ class rInvGauss:
 
     def get_parameters(self):
         return {'mode': self.theta, 'shape': self.gamma}
+    
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -131,33 +183,14 @@ if __name__ == '__main__':
     import os
     from scipy.stats import invgauss
 
-    t_range = numpy.linspace(0.1, 25)
-    rIG = rInvGauss(gamma=4.0)
+    sample = rInvGauss(theta=10, gamma=4.0).sample(1000)
+    rIG = rInvGauss()
+    rIG.fit(sample)
     print(rIG.get_parameters())
-    sample = rIG.sample(10000)
+
     plt.hist(sample, density=True, bins=50)
+    t_range = numpy.linspace(0.1, max(sample))
     plt.plot(t_range, rIG.pdf(t_range), color='red')
     plt.ylim(0, 0.8)
     plt.title('A generated sample')
     plt.show()
-
-    gamma_range = numpy.linspace(0.1, 5, 10)
-    lcv = [rIG.lcv(sample, g) for g in gamma_range]
-    plt.plot(gamma_range, lcv)
-    plt.show()
-#
-    for f in os.listdir('./data'):
-        if '.csv' not in f:
-            continue
-        df_rtime = pd.read_csv('./data/'+f)
-        sample = df_rtime.rtime
-#
-        #model = rInvGaussMixture(2).fit(sample)
-        #print(model.get_parameters())
-#
-        t_range = numpy.linspace(1, max(sample))
-        plt.hist(sample, bins=75, density=True)
-        #kernel_t_range = [rInvGauss().kde(sample)(tt) for tt in t_range]
-        #plt.plot(t_range, kernel_t_range)
-        plt.title(f[:-4])
-        plt.show()
