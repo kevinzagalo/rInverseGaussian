@@ -8,9 +8,11 @@ from sklearn.cluster import KMeans
 
 class rInvGaussMixture:
 
-    def __init__(self, n_components=1, max_iter=100, tol=1e-4, modes_init=None, shapes_init=None, weights_init=None):
+    def __init__(self, n_components=1, max_iter=100, tol=1e-4, modes_init=None, 
+                 shapes_init=None, weights_init=None, verbose=False):
         self.tol = tol,
         self.n_iter_ = max_iter
+        self.verbose = verbose
 
         if weights_init:
             assert len(weights_init) == n_components, 'Weights lengths should be equal to n_components'
@@ -93,11 +95,12 @@ class rInvGaussMixture:
                 aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
                 self.converged_ = abs((likelihood - old_l)/(1-aitken_acceleration)) < self.tol
                 if self.converged_:
-                    print('Converged in {} iterations'.format(self.n_iter_ - max_iter + 1))
+                    if self.verbose:
+                        print('Converged in {} iterations'.format(self.n_iter_ - max_iter + 1))
                     return self
             print('Not converged...')
         elif self._n_components == 1:
-            uni = rInvGauss(max_iter=self.n_iter_, tol=self.tol).fit(X)
+            uni = rInvGauss(max_iter=self.n_iter_, tol=self.tol, verbose=self.verbose).fit(X)
             self.modes_ = [uni.theta]
             self.shapes_ = [uni.gamma]
             self.weights_ = [1.]

@@ -5,11 +5,12 @@ from scipy.optimize import minimize
 
 class rInvGauss:
 
-    def __init__(self, theta=1.0, gamma=1.0, tol=1e-4, max_iter=100):
+    def __init__(self, theta=1.0, gamma=1.0, tol=1e-4, max_iter=100, verbose=False):
         self.theta = theta
         self.gamma = gamma
         self._n_iter = max_iter
         self.tol = tol
+        self.verbose = verbose
 
     def _mu(self, theta, gamma):
         return sqrt(theta * (3 * gamma + theta))
