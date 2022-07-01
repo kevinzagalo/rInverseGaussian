@@ -135,7 +135,8 @@ class rInvGauss:
             aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
             self.converged_ = abs((likelihood - old_l) / (1 - aitken_acceleration)) < self.tol
             if self.converged_:
-                print('Converged in {} iterations'.format(self._n_iter - max_iter + 1))
+                if self.verbose:
+                    print('Converged in {} iterations'.format(self._n_iter - max_iter + 1))
                 return self
         print('Not converged...')
         return self
@@ -147,13 +148,13 @@ class rInvGauss:
             gamma = self.gamma
         return lambda t: numpy.mean([self.pdf(t, x, gamma) for x in X])
 
-    def lcv(self, X, gamma):
-        X = list(X)
-        return numpy.mean([log(self.kde(X[:i]+X[i+1:], gamma)(x)) for i, x in enumerate(X)])
-
-    def min_lcv(self, X):
-        gamma = fmin_bfgs(f=lambda g: self.lcv(X, g), x0=numpy.array([1.0]), disp=False)
-        return max((gamma[0], 0.001))
+    #def lcv(self, X, gamma):
+    #    X = list(X)
+    #    return numpy.mean([log(self.kde(X[:i]+X[i+1:], gamma)(x)) for i, x in enumerate(X)])
+#
+    #def min_lcv(self, X):
+    #    gamma = fmin_bfgs(f=lambda g: self.lcv(X, g), x0=numpy.array([1.0]), disp=False)
+    #    return max((gamma[0], 0.001))
 
     def sample(self, n_sample=1):
         if n_sample < 1:
