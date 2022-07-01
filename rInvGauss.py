@@ -105,8 +105,7 @@ class rInvGauss:
                                + 4 * theta**3 \
                                + 3 * gamma**2 * (21 * theta + 2 * sqrt(theta * p))) \
                             / (4 * gamma ** 2 * sqrt(theta * p**5))
-        M = numpy.matrix([[dLL_dtheta2, dLL_dtheta_dgamma], [dLL_dtheta_dgamma, dLL_dgamma2]])
-        return M
+        return numpy.matrix([[dLL_dtheta2, dLL_dtheta_dgamma], [dLL_dtheta_dgamma, dLL_dgamma2]])
 
     def score(self, X, y=None, theta=None, gamma=None):
         return sum([self.log_pdf(x, theta, gamma) for x in X])
