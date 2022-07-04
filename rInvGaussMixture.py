@@ -9,7 +9,7 @@ from sklearn.cluster import KMeans
 class rInvGaussMixture:
 
     def __init__(self, n_components=1, max_iter=100, tol=1e-4, modes_init=None, 
-                 shapes_init=None, weights_init=None, verbose=False):
+                 smooth_init=None, weights_init=None, verbose=False):
         self.tol = tol,
         self.n_iter_ = max_iter
         self.verbose = verbose
@@ -21,12 +21,12 @@ class rInvGaussMixture:
 
         self._n_components = n_components
         self.modes_ = modes_init
-        self.shapes_ = shapes_init
+        self.smooth_ = smooth_init
         self.weights_ = weights_init
         self.converged_ = False
 
     def _proba_components(self, x):
-        return [pi_j * rInvGauss(self.modes_[j], self.shapes_[j]).pdf(x) for j, pi_j in enumerate(self.weights_)]
+        return [pi_j * rInvGauss(self.modes_[j], self.smooth_[j]).pdf(x) for j, pi_j in enumerate(self.weights_)]
 
     def pdf(self, x):
         return sum(self._proba_components(x))
@@ -55,7 +55,7 @@ class rInvGaussMixture:
 
     def _score_complete(self, X, z):
         l1 = sum([sum([z[i, j] * log(pi_j) for j, pi_j in enumerate(self.weights_)]) for i, _ in enumerate(X)])
-        l2 = sum([sum([z[i, j] * rInvGauss(self.modes_[j], self.shapes_[j]).log_pdf(x_i)
+        l2 = sum([sum([z[i, j] * rInvGauss(self.modes_[j], self.smooth_[j]).log_pdf(x_i)
                        for i, x_i in enumerate(X)]) for j in range(self._n_components)])
         return l1 + l2
 
@@ -67,7 +67,7 @@ class rInvGaussMixture:
         if self._n_components > 1:
             kmeans = KMeans(self._n_components).fit(X.reshape(-1, 1))
             self.modes_ = kmeans.cluster_centers_.reshape(-1)
-            self.shapes_ = [1.] * self._n_components
+            self.smooth_ = [1.] * self._n_components
             z = np.zeros((len(X), self._n_components))
             for i, j in enumerate(kmeans.predict(X.reshape(-1, 1))):
                 z[i, j] = 1
@@ -87,8 +87,8 @@ class rInvGaussMixture:
                 # M-step
                 self.weights_ = np.mean(z, axis=0).tolist()
                 for j in range(self._n_components):
-                    self.modes_[j], self.shapes_[j] = self._update_params(X, z[:, j],
-                                                                          np.array((self.modes_[j], self.shapes_[j])))
+                    self.modes_[j], self.smooth_[j] = self._update_params(X, z[:, j],
+                                                                          np.array((self.modes_[j], self.smooth_[j])))
 
                 # score
                 likelihood = self._score_complete(X, z)
@@ -102,7 +102,7 @@ class rInvGaussMixture:
         elif self._n_components == 1:
             uni = rInvGauss(max_iter=self.n_iter_, tol=self.tol, verbose=self.verbose).fit(X)
             self.modes_ = [uni.theta]
-            self.shapes_ = [uni.gamma]
+            self.smooth_ = [uni.gamma]
             self.weights_ = [1.]
         return self
     
@@ -136,8 +136,8 @@ class rInvGaussMixture:
         mu = np.zeros(n_sample)
         lambd = np.zeros(n_sample)
         for i, k in enumerate(clusters_):
-            mu[i] = rInvGauss(theta=self.modes_[k], gamma=self.shapes_[k]).mu
-            lambd[i] = rInvGauss(theta=self.modes_[k], gamma=self.shapes_[k]).lambd
+            mu[i] = rInvGauss(theta=self.modes_[k], gamma=self.smooth_[k]).mu
+            lambd[i] = rInvGauss(theta=self.modes_[k], gamma=self.smooth_[k]).lambd
         y = np.random.normal(size=n_sample)**2
         X = mu + (mu**2 * y - mu * np.sqrt(4 * mu * lambd * y +mu**2 * y**2)) / (2 * lambd)
         U = np.random.rand(n_sample)
@@ -151,7 +151,7 @@ class rInvGaussMixture:
 
     def get_parameters(self):
         return {'weights': self.weights_, 'modes': self.modes_,
-                'shapes': self.shapes_, 'n_components': self._n_components}
+                'smooth': self.smooth_, 'n_components': self._n_components}
 
 
 if __name__ == '__main__':
