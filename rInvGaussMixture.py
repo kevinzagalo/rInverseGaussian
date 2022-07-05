@@ -8,18 +8,26 @@ from sklearn.cluster import KMeans
 
 class rInvGaussMixture:
 
-    def __init__(self, n_components=1, max_iter=100, tol=1e-4, modes_init=None, 
+    def __init__(self, n_components, max_iter=100, tol=1e-4, modes_init=None, shapes_init=None,
                  smooth_init=None, weights_init=None, verbose=False):
         self.tol = tol,
         self.n_iter_ = max_iter
         self.verbose = verbose
+        self._n_components = n_components
 
         if weights_init:
-            assert len(weights_init) == n_components, 'Weights lengths should be equal to n_components'
-        else:
-            weights_init = [1./n_components] * n_components
+            assert len(weights_init) == self._n_components, 'Weights lengths should be equal to n_components'
 
-        self._n_components = n_components
+        if modes_init:
+            assert len(modes_init) == self._n_components, 'Modes lengths should be equal to n_components'
+
+        if smooth_init:
+            assert len(smooth_init) == self._n_components, 'Smooth lengths should be equal to n_components'
+
+        if shapes_init:
+            smooth_init = shapes_init
+            print('shapes_init is deprecated, please use smooth_init instead in the future')
+
         self.modes_ = modes_init
         self.smooth_ = smooth_init
         self.weights_ = weights_init
@@ -64,14 +72,17 @@ class rInvGaussMixture:
 
     def _EM(self, XX, verbose=False):
         X = np.array(XX).copy()
+        kmeans = KMeans(self._n_components).fit(X.reshape(-1, 1))
+
+        z = np.zeros((len(X), self._n_components))
+        for i, j in enumerate(kmeans.predict(X.reshape(-1, 1))):
+            z[i, j] = 1
+        weights_init = np.mean(z, axis=0).tolist()
+
+        self.modes_ = kmeans.cluster_centers_.reshape(-1)
+        self.smooth_ = [1.] * self._n_components
+
         if self._n_components > 1:
-            kmeans = KMeans(self._n_components).fit(X.reshape(-1, 1))
-            self.modes_ = kmeans.cluster_centers_.reshape(-1)
-            self.smooth_ = [1.] * self._n_components
-            z = np.zeros((len(X), self._n_components))
-            for i, j in enumerate(kmeans.predict(X.reshape(-1, 1))):
-                z[i, j] = 1
-            self.weights_ = np.mean(z, axis=0).tolist()
             likelihood = self._score_complete(X, z)
             max_iter = self.n_iter_
             old_l = 0
@@ -159,8 +170,22 @@ if __name__ == '__main__':
     import pandas as pd
     import os
 
+
+    sample = rInvGaussMixture(n_components=2, weights_init=[0.3, 0.7], modes_init=[10, 100], smooth_init=[1, 4.0]).sample(1000)
+
+    rIG = rInvGauss()
+    plt.hist(sample, density=True, bins=50)
+    t_range = numpy.linspace(0.1, max(sample))
+
+    kernel_t_range = [rIG.kde(sample)(tt) for tt in t_range]
+    plt.plot(t_range, kernel_t_range, color='red')
+    plt.ylim(0, 0.8)
+    plt.title('A generated sample with kde')
+    plt.show()
+
+
     #for f in os.listdir('data'):
-    #    if 'xtimes' in f:
+    #    if 'xtimes' in f or 'pdf' in f:
     #        continue
     #    print(f)
     #    n_components = int(f[-5])
@@ -171,33 +196,32 @@ if __name__ == '__main__':
     #        continue
     #    rIG = rInvGaussMixture(n_components).fit(x)
     #    print(rIG.get_parameters())
-#
-    #    t_range = np.linspace(1, max(x))
-    #    plt.hist(x, density=True, bins=50)
-    #    plt.plot(t_range, rIG.pdf(t_range))
-    #    plt.title(f[:-6])
+    #    t_range = np.linspace(1, max(x), 1000)
+    #    plt.hist(x, density=True, bins=50, color='black')
+    #    plt.plot(t_range, rIG.pdf(t_range), color='red')
+    #    plt.savefig('data/{}.pdf'.format(f[:-6]))
     #    plt.show()
 
-    x = pd.read_csv('data/actl_5.csv').values[:, 1]
-
-    BICS = []
-    AICS = []
-    t_range = np.linspace(1, max(x))
-    plt.hist(x, density=True)
-    for n_components in range(2, 10):
-        rIG = rInvGaussMixture(n_components).fit(x)
-        plt.plot(t_range, rIG.pdf(t_range), label='n_component={}'.format(n_components), ls='dotted')
-        BICS.append(rIG.bic(x))
-        AICS.append(rIG.aic(x))
-    plt.show()
-
-    fig, ax = plt.subplots()
-    ax.plot(range(2, 10), BICS, label='BIC')
-    ax_ = ax.twinx()
-    ax.set_ylabel('BIC')
-    plt.xlabel('m')
-    ax_.plot(range(2, 10), AICS, label='AIC')
-    ax_.set_ylabel('AIC')
-    plt.legend()
-    plt.show()
+    #x = pd.read_csv('data/actl_5.csv').values[:, 1]
+#
+    #BICS = []
+    #AICS = []
+    #t_range = np.linspace(1, max(x))
+    #plt.hist(x, density=True)
+    #for n_components in range(2, 10):
+    #    rIG = rInvGaussMixture(n_components).fit(x)
+    #    plt.plot(t_range, rIG.pdf(t_range), label='n_component={}'.format(n_components), ls='dotted')
+    #    BICS.append(rIG.bic(x))
+    #    AICS.append(rIG.aic(x))
+    #plt.show()
+#
+    #fig, ax = plt.subplots()
+    #ax.plot(range(2, 10), BICS, label='BIC')
+    #ax_ = ax.twinx()
+    #ax.set_ylabel('BIC')
+    #plt.xlabel('m')
+    #ax_.plot(range(2, 10), AICS, label='AIC')
+    #ax_.set_ylabel('AIC')
+    #plt.legend()
+    #plt.show()
 

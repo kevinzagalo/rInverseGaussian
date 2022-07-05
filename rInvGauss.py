@@ -59,9 +59,9 @@ class rInvGauss:
         else:  # in case we use the object parameters
             mu = self.mu
             lambd = self.lambd
-        a1 = log(lambd)/2 - log(2) - log(numpy.pi) - 3 * log(x)
+        a1 = log(lambd) - log(2) - log(numpy.pi) - 3 * log(x)
         a2 = lambd * (x - mu)**2 / (x * mu**2)
-        return a1 - a2/2
+        return a1/2 - a2/2
 
     def _dlogf(self, x, theta=None, gamma=None):
         self._checkvalues()
@@ -185,13 +185,13 @@ if __name__ == '__main__':
     from scipy.stats import invgauss
 
     sample = rInvGauss(theta=10, gamma=4.0).sample(1000)
+    
     rIG = rInvGauss()
-    rIG.fit(sample)
-    print(rIG.get_parameters())
-
     plt.hist(sample, density=True, bins=50)
     t_range = numpy.linspace(0.1, max(sample))
-    plt.plot(t_range, rIG.pdf(t_range), color='red')
+
+    kernel_t_range = [rIG.kde(sample)(tt) for tt in t_range]
+    plt.plot(t_range, kernel_t_range, color='red')
     plt.ylim(0, 0.8)
-    plt.title('A generated sample')
+    plt.title('A generated sample with kde')
     plt.show()
