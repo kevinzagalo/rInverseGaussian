@@ -77,7 +77,7 @@ class rInvGaussMixture:
         z = np.zeros((len(X), self._n_components))
         for i, j in enumerate(kmeans.predict(X.reshape(-1, 1))):
             z[i, j] = 1
-        weights_init = np.mean(z, axis=0).tolist()
+        self.weights_ = np.mean(z, axis=0).tolist()
 
         self.modes_ = kmeans.cluster_centers_.reshape(-1)
         self.smooth_ = [1.] * self._n_components
@@ -170,12 +170,11 @@ if __name__ == '__main__':
     import pandas as pd
     import os
 
-
     sample = rInvGaussMixture(n_components=2, weights_init=[0.3, 0.7], modes_init=[10, 100], smooth_init=[1, 4.0]).sample(1000)
 
     rIG = rInvGauss()
     plt.hist(sample, density=True, bins=50)
-    t_range = numpy.linspace(0.1, max(sample))
+    t_range = np.linspace(0.1, max(sample))
 
     kernel_t_range = [rIG.kde(sample)(tt) for tt in t_range]
     plt.plot(t_range, kernel_t_range, color='red')
