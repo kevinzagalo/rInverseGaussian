@@ -10,10 +10,11 @@ class rInvGaussMixture:
 
     def __init__(self, n_components, max_iter=100, tol=1e-4, modes_init=None, shapes_init=None,
                  smooth_init=None, weights_init=None, verbose=False):
-        self.tol = tol,
+        self.tol = tol
         self.n_iter_ = max_iter
         self.verbose = verbose
         self._n_components = n_components
+        self.gammaIsFixed = False
 
         if weights_init:
             assert len(weights_init) == self._n_components, 'Weights lengths should be equal to n_components'
@@ -23,6 +24,7 @@ class rInvGaussMixture:
 
         if smooth_init:
             assert len(smooth_init) == self._n_components, 'Smooth lengths should be equal to n_components'
+            self.gammaIsFixed = True
 
         if shapes_init:
             smooth_init = shapes_init
@@ -55,11 +57,17 @@ class rInvGaussMixture:
         return zz
 
     def _update_params(self, XX, zz, x0):
-        hess_LL = lambda x: -self._second_derivative_complete_likelihood(XX, zz, x[0], x[1])
-        grad_LL = lambda x: -self._derivative_complete_likelihood(XX, zz, x[0], x[1])
-        LL = lambda x: -self._complete_likelihood(XX, zz, x[0], x[1])
-        res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)
-        return res['x']
+        if self.gammaIsFixed:
+            hess_LL = lambda y: -self._second_derivative_complete_likelihood(XX, zz, y[0], x0[1])
+            grad_LL = lambda y: -self._derivative_complete_likelihood(XX, zz, y[0], x0[1])
+            LL = lambda y: -self._complete_likelihood(XX, zz, y[0], x0[1])
+            res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x'][0], x0[1]
+        else:
+            hess_LL = lambda x: -self._second_derivative_complete_likelihood(XX, zz, x[0], x[1])
+            grad_LL = lambda x: -self._derivative_complete_likelihood(XX, zz, x[0], x[1])
+            LL = lambda x: -self._complete_likelihood(XX, zz, x[0], x[1])
+            res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x']
+        return res
 
     def _score_complete(self, X, z):
         l1 = sum([sum([z[i, j] * log(pi_j) for j, pi_j in enumerate(self.weights_)]) for i, _ in enumerate(X)])
@@ -75,15 +83,18 @@ class rInvGaussMixture:
         kmeans = KMeans(self._n_components).fit(X.reshape(-1, 1))
 
         z = np.zeros((len(X), self._n_components))
-        for i, j in enumerate(kmeans.predict(X.reshape(-1, 1))):
-            z[i, j] = 1
-        self.weights_ = np.mean(z, axis=0).tolist()
+        if self.weights_ is None:
+            for i, j in enumerate(kmeans.predict(X.reshape(-1, 1))):
+                z[i, j] = 1
+            self.weights_ = np.mean(z, axis=0).tolist()
 
-        self.modes_ = kmeans.cluster_centers_.reshape(-1)
-        self.smooth_ = [1.] * self._n_components
+        if self.modes_ is None:
+            self.modes_ = kmeans.cluster_centers_.reshape(-1)
+        if self.smooth_ is None and not self.gammaIsFixed:
+            self.smooth_ = [1.] * self._n_components
 
         if self._n_components > 1:
-            likelihood = self._score_complete(X, z)
+            likelihood = self.score(X)
             max_iter = self.n_iter_
             old_l = 0
 
@@ -100,18 +111,19 @@ class rInvGaussMixture:
                 for j in range(self._n_components):
                     self.modes_[j], self.smooth_[j] = self._update_params(X, z[:, j],
                                                                           np.array((self.modes_[j], self.smooth_[j])))
-
                 # score
-                likelihood = self._score_complete(X, z)
+                likelihood = self.score(X)
                 aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
                 self.converged_ = abs((likelihood - old_l)/(1-aitken_acceleration)) < self.tol
                 if self.converged_:
-                    if self.verbose:
+                    if self.verbose or verbose:
                         print('Converged in {} iterations'.format(self.n_iter_ - max_iter + 1))
                     return self
             print('Not converged...')
         elif self._n_components == 1:
-            uni = rInvGauss(max_iter=self.n_iter_, tol=self.tol, verbose=self.verbose).fit(X)
+            uni = rInvGauss(theta=self.modes_[0] if self.modes_ else None,
+                            gamma=self.smooth_[0] if self.smooth_ else None,
+                            max_iter=self.n_iter_, tol=self.tol, verbose=self.verbose).fit(X)
             self.modes_ = [uni.theta]
             self.smooth_ = [uni.gamma]
             self.weights_ = [1.]
@@ -170,16 +182,18 @@ if __name__ == '__main__':
     import pandas as pd
     import os
 
-    sample = rInvGaussMixture(n_components=2, weights_init=[0.3, 0.7], modes_init=[10, 100], smooth_init=[1, 4.0]).sample(1000)
+    sample = rInvGaussMixture(n_components=2, weights_init=[0.3, 0.7], modes_init=[10, 100], smooth_init=[1, 4.0]).sample(10000)
 
-    rIG = rInvGauss()
-    plt.hist(sample, density=True, bins=50)
+    rIG1 = rInvGaussMixture(n_components=2, smooth_init=[1, 4.0]).fit(sample)
+    rIG2 = rInvGaussMixture(n_components=2).fit(sample)
+
+    print(rIG1.get_parameters())
+    plt.hist(sample, density=True, bins=50, color='black')
     t_range = np.linspace(0.1, max(sample))
-
-    kernel_t_range = [rIG.kde(sample)(tt) for tt in t_range]
-    plt.plot(t_range, kernel_t_range, color='red')
-    plt.ylim(0, 0.8)
-    plt.title('A generated sample with kde')
+    plt.plot(t_range, rIG1.pdf(t_range), color='red')
+    plt.plot(t_range, rIG2.pdf(t_range), color='blue')
+    #plt.ylim(0, 0.8)
+    plt.title('A generated sample with MLE')
     plt.show()
 
 

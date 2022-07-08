@@ -25,9 +25,10 @@ class rInvGauss:
         return mu**2/lambd
 
     def _checkvalues(self):
-        if self.theta and self.gamma:
-            assert self.theta > 0 and self.gamma > 0, \
+        if self.theta <= 0 or self.gamma <= 0:
+            raise ValueError(
                 'theta = {} and gamma = {} must be positive'.format(self.theta, self.gamma)
+            )
 
     @property
     def mu(self):
