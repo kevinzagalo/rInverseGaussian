@@ -121,24 +121,24 @@ class rInvGauss:
         if self.gammaIsFixed:
             hess_LL = lambda y: sum([-self._hesslogf(x, y[0], x0[1]) for x in XX])
             grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], x0[1]) for x in XX]).sum(axis=0)
-            LL = lambda y: -self.score(XX, theta=y, gamma=x0[1])
+            LL = lambda y: -self.score(XX, theta=y[0], gamma=x0[1])
             res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x'][0], x0[1]
         else:
-            hess_LL = lambda y: sum([-self._hesslogf(x, y[0], x0[1]) for x in XX])
-            grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], x0[1]) for x in XX]).sum(axis=0)
-            LL = lambda y: -self.score(XX, theta=y, gamma=x0[1])
-            res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)
+            hess_LL = lambda y: sum([-self._hesslogf(x, y[0], y[1]) for x in XX])
+            grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], y[1]) for x in XX]).sum(axis=0)
+            LL = lambda y: -self.score(XX, theta=y[0], gamma=y[1])
+            res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x']
         return res
 
     def fit(self, XX):
         X = numpy.array(XX).copy()
-        likelihood = self.score(X)
         max_iter = self._n_iter
         old_l = 0
         if self.theta is None:
-            self.theta = numpy.mode(X)
+            self.theta = numpy.mean(X)
         if not self.gammaIsFixed:
-            self.gamma = [1.] * self._n_components
+            self.gamma = 1
+        likelihood = self.score(X)
 
         for _ in range(self._n_iter):
             max_iter -= 1
@@ -202,13 +202,26 @@ if __name__ == '__main__':
     from scipy.stats import invgauss
 
     sample = rInvGauss(theta=10, gamma=4.0).sample(1000)
-    
-    rIG = rInvGauss()
-    plt.hist(sample, density=True, bins=50)
-    t_range = numpy.linspace(0.1, max(sample))
 
-    kernel_t_range = [rIG.kde(sample)(tt) for tt in t_range]
-    plt.plot(t_range, kernel_t_range, color='red')
-    plt.ylim(0, 0.8)
-    plt.title('A generated sample with kde')
+    rIG1 = rInvGauss(gamma=4.0).fit(sample)
+    rIG2 = rInvGauss().fit(sample)
+
+    print(rIG1.get_parameters())
+    print(rIG2.get_parameters())
+
+    plt.hist(sample, density=True, bins=50, color='black')
+    t_range = numpy.linspace(0.1, max(sample))
+    plt.plot(t_range, rIG1.pdf(t_range), color='red', label='gamma fixed')
+    plt.plot(t_range, rIG2.pdf(t_range), color='blue', label='gamma not fixed')
+    #plt.ylim(0, 0.8)
+    plt.legend()
+    plt.title('A generated sample with MLE')
     plt.show()
+    #plt.hist(sample, density=True, bins=50)
+    #t_range = numpy.linspace(0.1, max(sample))
+#
+    #kernel_t_range = [rIG.kde(sample)(tt) for tt in t_range]
+    #plt.plot(t_range, kernel_t_range, color='red')
+    #plt.ylim(0, 0.8)
+    #plt.title('A generated sample with kde')
+    #plt.show()
