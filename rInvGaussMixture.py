@@ -88,9 +88,8 @@ class rInvGaussMixture:
                 z[i, j] = 1
             self.weights_ = np.mean(z, axis=0).tolist()
 
-        if self.modes_ is None:
-            self.modes_ = kmeans.cluster_centers_.reshape(-1)
-        if self.smooth_ is None and not self.gammaIsFixed:
+        self.modes_ = kmeans.cluster_centers_.reshape(-1)
+        if not self.gammaIsFixed:
             self.smooth_ = [1.] * self._n_components
 
         if self._n_components > 1:
@@ -188,11 +187,14 @@ if __name__ == '__main__':
     rIG2 = rInvGaussMixture(n_components=2).fit(sample)
 
     print(rIG1.get_parameters())
+    print(rIG2.get_parameters())
+
     plt.hist(sample, density=True, bins=50, color='black')
     t_range = np.linspace(0.1, max(sample))
-    plt.plot(t_range, rIG1.pdf(t_range), color='red')
-    plt.plot(t_range, rIG2.pdf(t_range), color='blue')
+    plt.plot(t_range, rIG1.pdf(t_range), color='red', label='gamma fixed')
+    plt.plot(t_range, rIG2.pdf(t_range), color='blue', label='gamma not fixed')
     #plt.ylim(0, 0.8)
+    plt.legend()
     plt.title('A generated sample with MLE')
     plt.show()
 

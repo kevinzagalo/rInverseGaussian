@@ -5,9 +5,15 @@ from scipy.optimize import minimize
 
 class rInvGauss:
 
-    def __init__(self, theta=1.0, gamma=1.0, tol=1e-4, max_iter=100, verbose=False):
+    def __init__(self, theta=None, gamma=None, tol=1e-4, max_iter=100, verbose=False):
         self.theta = theta
+
+        if gamma:
+            self.gammaIsFixed = True
+        else:
+            self.gammaIsFixed = False
         self.gamma = gamma
+
         self._n_iter = max_iter
         self.tol = tol
         self.verbose = verbose
@@ -112,17 +118,27 @@ class rInvGauss:
         return sum([self.log_pdf(x, theta, gamma) for x in X])
 
     def _update_params(self, XX, x0):
-        hess_LL = lambda y: sum([-self._hesslogf(x, y[0], y[1]) for x in XX])
-        grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], y[1]) for x in XX]).sum(axis=0)
-        LL = lambda x: -self.score(XX, theta=x[0], gamma=x[1])
-        res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)
-        return res['x']
+        if self.gammaIsFixed:
+            hess_LL = lambda y: sum([-self._hesslogf(x, y[0], x0[1]) for x in XX])
+            grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], x0[1]) for x in XX]).sum(axis=0)
+            LL = lambda y: -self.score(XX, theta=y, gamma=x0[1])
+            res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x'][0], x0[1]
+        else:
+            hess_LL = lambda y: sum([-self._hesslogf(x, y[0], x0[1]) for x in XX])
+            grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], x0[1]) for x in XX]).sum(axis=0)
+            LL = lambda y: -self.score(XX, theta=y, gamma=x0[1])
+            res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)
+        return res
 
     def fit(self, XX):
         X = numpy.array(XX).copy()
         likelihood = self.score(X)
         max_iter = self._n_iter
         old_l = 0
+        if self.theta is None:
+            self.theta = numpy.mode(X)
+        if not self.gammaIsFixed:
+            self.gamma = [1.] * self._n_components
 
         for _ in range(self._n_iter):
             max_iter -= 1
