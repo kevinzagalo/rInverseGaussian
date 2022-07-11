@@ -96,8 +96,8 @@ class rInvGaussMixture:
             likelihood = self.score(X)
             max_iter = self.n_iter_
             old_l = 0
-
-            for _ in trange(self.n_iter_):
+            pbar = trange(self.n_iter_)
+            for _ in pbar:
                 max_iter -= 1
                 old_likelihood = old_l
                 old_l = likelihood
@@ -113,11 +113,12 @@ class rInvGaussMixture:
                 # score
                 likelihood = self.score(X)
                 aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
-                self.converged_ = abs((likelihood - old_l)/(1-aitken_acceleration)) < self.tol
+                self.converged_ = abs((likelihood - old_l) / (1 - aitken_acceleration)) < self.tol
                 if self.converged_:
                     if self.verbose or verbose:
                         print('Converged in {} iterations'.format(self.n_iter_ - max_iter + 1))
                     return self
+                pbar.set_description('acceleration = {}'.format(aitken_acceleration))
             print('Not converged...')
         elif self._n_components == 1:
             uni = rInvGauss(theta=self.modes_[0] if self.modes_ else None,
@@ -127,7 +128,7 @@ class rInvGaussMixture:
             self.smooth_ = [uni.gamma]
             self.weights_ = [1.]
         return self
-    
+
     def fit(self, X, y=None, verbose=False, method='EM'):
         return self._EM(X, verbose=verbose)
 
@@ -160,15 +161,15 @@ class rInvGaussMixture:
         for i, k in enumerate(clusters_):
             mu[i] = rInvGauss(theta=self.modes_[k], gamma=self.smooth_[k]).mu
             lambd[i] = rInvGauss(theta=self.modes_[k], gamma=self.smooth_[k]).lambd
-        y = np.random.normal(size=n_sample)**2
-        X = mu + (mu**2 * y - mu * np.sqrt(4 * mu * lambd * y +mu**2 * y**2)) / (2 * lambd)
+        y = np.random.normal(size=n_sample) ** 2
+        X = mu + (mu ** 2 * y - mu * np.sqrt(4 * mu * lambd * y + mu ** 2 * y ** 2)) / (2 * lambd)
         U = np.random.rand(n_sample)
         S = np.zeros(n_sample)
         Z = mu / (mu + X)
         ok = (U <= Z)
         notok = (U > Z)
         S[ok] = X[ok]
-        S[notok] = mu[notok]**2 / X[notok]
+        S[notok] = mu[notok] ** 2 / X[notok]
         return S
 
     def get_parameters(self):
@@ -181,7 +182,8 @@ if __name__ == '__main__':
     import pandas as pd
     import os
 
-    sample = rInvGaussMixture(n_components=2, weights_init=[0.3, 0.7], modes_init=[10, 100], smooth_init=[1, 4.0]).sample(10000)
+    sample = rInvGaussMixture(n_components=2, weights_init=[0.3, 0.7], modes_init=[10, 100],
+                              smooth_init=[1, 4.0]).sample(10000)
 
     rIG1 = rInvGaussMixture(n_components=2, smooth_init=[1, 4.0]).fit(sample)
     rIG2 = rInvGaussMixture(n_components=2).fit(sample)
@@ -193,13 +195,12 @@ if __name__ == '__main__':
     t_range = np.linspace(0.1, max(sample))
     plt.plot(t_range, rIG1.pdf(t_range), color='red', label='gamma fixed')
     plt.plot(t_range, rIG2.pdf(t_range), color='blue', label='gamma not fixed')
-    #plt.ylim(0, 0.8)
+    # plt.ylim(0, 0.8)
     plt.legend()
     plt.title('A generated sample with MLE')
     plt.show()
 
-
-    #for f in os.listdir('data'):
+    # for f in os.listdir('data'):
     #    if 'xtimes' in f or 'pdf' in f:
     #        continue
     #    print(f)
@@ -217,26 +218,26 @@ if __name__ == '__main__':
     #    plt.savefig('data/{}.pdf'.format(f[:-6]))
     #    plt.show()
 
-    #x = pd.read_csv('data/actl_5.csv').values[:, 1]
+    # x = pd.read_csv('data/actl_5.csv').values[:, 1]
 #
-    #BICS = []
-    #AICS = []
-    #t_range = np.linspace(1, max(x))
-    #plt.hist(x, density=True)
-    #for n_components in range(2, 10):
-    #    rIG = rInvGaussMixture(n_components).fit(x)
-    #    plt.plot(t_range, rIG.pdf(t_range), label='n_component={}'.format(n_components), ls='dotted')
-    #    BICS.append(rIG.bic(x))
-    #    AICS.append(rIG.aic(x))
-    #plt.show()
+# BICS = []
+# AICS = []
+# t_range = np.linspace(1, max(x))
+# plt.hist(x, density=True)
+# for n_components in range(2, 10):
+#    rIG = rInvGaussMixture(n_components).fit(x)
+#    plt.plot(t_range, rIG.pdf(t_range), label='n_component={}'.format(n_components), ls='dotted')
+#    BICS.append(rIG.bic(x))
+#    AICS.append(rIG.aic(x))
+# plt.show()
 #
-    #fig, ax = plt.subplots()
-    #ax.plot(range(2, 10), BICS, label='BIC')
-    #ax_ = ax.twinx()
-    #ax.set_ylabel('BIC')
-    #plt.xlabel('m')
-    #ax_.plot(range(2, 10), AICS, label='AIC')
-    #ax_.set_ylabel('AIC')
-    #plt.legend()
-    #plt.show()
+# fig, ax = plt.subplots()
+# ax.plot(range(2, 10), BICS, label='BIC')
+# ax_ = ax.twinx()
+# ax.set_ylabel('BIC')
+# plt.xlabel('m')
+# ax_.plot(range(2, 10), AICS, label='AIC')
+# ax_.set_ylabel('AIC')
+# plt.legend()
+# plt.show()
 
