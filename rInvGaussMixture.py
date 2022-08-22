@@ -146,6 +146,7 @@ class rInvGaussMixtureCore:
         S = np.zeros(n_sample)
         Z = mu / (mu + X)
         ok = (U <= Z)
+
         notok = (U > Z)
         S[ok] = X[ok]
         S[notok] = mu[notok] ** 2 / X[notok]
@@ -157,7 +158,6 @@ class rInvGaussMixtureCore:
 
 
 class rInvGaussMixture(rInvGaussMixtureCore):
-
     def __init__(self, n_components, max_iter=100, tol=1e-4, modes_init=None,
                  smooth_init=None, weights_init=None, verbose=False):
         super().__init__(n_components=n_components, tol=tol, max_iter=max_iter, modes_init=modes_init,

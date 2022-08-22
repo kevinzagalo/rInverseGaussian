@@ -28,7 +28,7 @@ class RTInvGaussMixture(rInvGaussMixtureCore):
         return sqrt((backlog / (1 - self.utilization))**2 + (1.5 * self.smooth_[0])**2) - 1.5 * self.smooth_[0]
 
     def _backlog(self, theta, gamma):
-        return (1 - self.utilization) * sqrt(theta + 3 * gamma)
+        return (1 - self.utilization) * theta * sqrt(theta + 3 * gamma)
     
     def dtheta_dbacklog(self, backlog):
         return backlog / (1 - self.utilization) ** 2 / sqrt((backlog / (1 - self.utilization)) ** 2 + (1.5 * self.smooth_[0]) ** 2)
@@ -108,8 +108,6 @@ if __name__ == '__main__':
 
     sample = pd.read_csv('data/task_30.csv')["0"].astype(float)
     rIG = RTInvGaussMixture(n_components=n_components, smooth_init=gamma[30], utilization=U[30]).fit(sample, method='BFGS')
-    rIG0 = rInvGaussMixture(n_components=n_components).fit(sample, method='dogleg')
-
     print(rIG.get_parameters())
     print(rIG0.get_parameters())
 
