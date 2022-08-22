@@ -28,7 +28,7 @@ class RTInvGaussMixture(rInvGaussMixtureCore):
         return sqrt((backlog / (1 - self.utilization))**2 + (1.5 * self.smooth_[0])**2) - 1.5 * self.smooth_[0]
 
     def _backlog(self, theta, gamma):
-        return (1 - self.utilization) * theta * sqrt(theta + 3 * gamma)
+        return (1 - self.utilization) * sqrt(theta) * sqrt(theta + 3 * gamma)
     
     def dtheta_dbacklog(self, backlog):
         return backlog / (1 - self.utilization) ** 2 / sqrt((backlog / (1 - self.utilization)) ** 2 + (1.5 * self.smooth_[0]) ** 2)
