@@ -65,7 +65,7 @@ class rInvGaussMixtureCore:
         pass
 
     @abc.abstractmethod
-    def _M_step(self):
+    def _M_step(self, X, z, method):
         pass
 
     def _EM(self, XX, verbose=False, method='dogleg'):
@@ -138,8 +138,8 @@ class rInvGaussMixtureCore:
         mu = np.zeros(n_sample)
         lambd = np.zeros(n_sample)
         for i, k in enumerate(clusters_):
-            mu[i] = rInvGauss(theta=self.modes_[k], gamma=self.smooth_).mu
-            lambd[i] = rInvGauss(theta=self.modes_[k], gamma=self.smooth_).lambd
+            mu[i] = rInvGauss(theta=self.modes_[k], gamma=self.smooth_[k]).mu
+            lambd[i] = rInvGauss(theta=self.modes_[k], gamma=self.smooth_[k]).lambd
         y = np.random.normal(size=n_sample) ** 2
         X = mu + (mu ** 2 * y - mu * np.sqrt(4 * mu * lambd * y + mu ** 2 * y ** 2)) / (2 * lambd)
         U = np.random.rand(n_sample)
@@ -163,11 +163,11 @@ class rInvGaussMixture(rInvGaussMixtureCore):
         super().__init__(n_components=n_components, tol=tol, max_iter=max_iter, modes_init=modes_init,
                          weights_init=weights_init, verbose=verbose, smooth_init=smooth_init)
 
-    def _update_params(self, XX, zz, x0):
+    def _update_params(self, XX, zz, x0, method='dogleg'):
         hess_LL = lambda x: -self._second_derivative_complete_likelihood(XX, zz, x[0], x[1])
         grad_LL = lambda x: -self._derivative_complete_likelihood(XX, zz, x[0], x[1])
         LL = lambda x: -self._complete_likelihood(XX, zz, x[0], x[1])
-        res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x']
+        res = minimize(fun=LL, method=method, x0=x0, jac=grad_LL, hess=hess_LL)['x']
         return res
 
     def initialize(self, X, method='kmeans'):
@@ -184,11 +184,11 @@ class rInvGaussMixture(rInvGaussMixtureCore):
         if self.smooth_ is None:
             self.smooth_ = [1.] * self._n_components
 
-    def _M_step(self, X, z):
+    def _M_step(self, X, z, method):
         self.weights_ = np.mean(z, axis=0).tolist()
         for j in range(self._n_components):
-            self.modes_[j], self.smooth_[j] = self._update_params(X, z[:, j],
-                                                                  np.array((self.modes_[j], self.smooth_[j])))
+            self.modes_[j], self.smooth_[j] = self._update_params(X, z[:, j], method=method,
+                                                                  x0=np.array((self.modes_[j], self.smooth_[j])))
         return 0
 
     def get_parameters(self):

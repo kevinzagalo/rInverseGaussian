@@ -3,7 +3,7 @@ from math import sqrt, log, exp
 from scipy.optimize import minimize, fmin_bfgs
 from tqdm import trange
 from rInvGauss import rInvGauss
-from rInvGaussMixture import rInvGaussMixtureCore
+from rInvGaussMixture import rInvGaussMixtureCore, rInvGaussMixture
 from sklearn.cluster import KMeans
 
 
@@ -108,12 +108,16 @@ if __name__ == '__main__':
 
     sample = pd.read_csv('data/task_30.csv')["0"].astype(float)
     rIG = RTInvGaussMixture(n_components=n_components, smooth_init=gamma[30], utilization=U[30]).fit(sample, method='BFGS')
+    rIG0 = rInvGaussMixture(n_components=n_components).fit(sample, method='dogleg')
 
     print(rIG.get_parameters())
+    print(rIG0.get_parameters())
 
     plt.hist(sample, density=True, bins=50, color='black')
     t_range = np.linspace(0.1, max(sample))
     plt.plot(t_range, rIG.pdf(t_range), color='red', label='gamma fixed')
+    plt.plot(t_range, rIG0.pdf(t_range), color='blue', label='gamma not fixed')
+
     # plt.ylim(0, 0.8)
     plt.legend()
     plt.title('A generated sample with MLE')
