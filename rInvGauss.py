@@ -8,14 +8,8 @@ class rInvGauss:
 
     def __init__(self, theta=None, gamma=None, tol=1e-4, max_iter=100, verbose=False):
         self.theta = theta
-
-        if gamma:
-            self.gammaIsFixed = True
-        else:
-            self.gammaIsFixed = False
         self.gamma = gamma
-
-        self._n_iter = max_iter
+        self.n_iter = max_iter
         self.tol = tol
         self.verbose = verbose
 
@@ -39,12 +33,10 @@ class rInvGauss:
 
     @property
     def mu(self):
-        self._checkvalues()
         return self._mu(self.theta, self.gamma)
 
     @property
     def lambd(self):
-        self._checkvalues()
         return self._lambd(self.theta, self.gamma)
 
     def pdf(self, x, theta=None, gamma=None):
@@ -119,37 +111,35 @@ class rInvGauss:
         return sum([self.log_pdf(x, theta, gamma) for x in X])
 
     def _update_params(self, XX, x0):
-        if self.gammaIsFixed:
-            hess_LL = lambda y: sum([-self._hesslogf(x, y[0], x0[1]) for x in XX])
-            grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], x0[1]) for x in XX]).sum(axis=0)
-            LL = lambda y: -self.score(XX, theta=y[0], gamma=x0[1])
-            res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x'][0], x0[1]
-        else:
-            hess_LL = lambda y: sum([-self._hesslogf(x, y[0], y[1]) for x in XX])
-            grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], y[1]) for x in XX]).sum(axis=0)
-            LL = lambda y: -self.score(XX, theta=y[0], gamma=y[1])
-            res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x']
+        hess_LL = lambda y: sum([-self._hesslogf(x, y[0], y[1]) for x in XX])
+        grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], y[1]) for x in XX]).sum(axis=0)
+        LL = lambda y: -self.score(XX, theta=y[0], gamma=y[1])
+        res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x']
         return res
 
     def fit(self, XX):
         X = numpy.array(XX).copy()
-        max_iter = self._n_iter
-        old_l = 0
+
         if self.theta is None:
             self.theta = numpy.mean(X)
-        if not self.gammaIsFixed:
-            self.gamma = 1
-        likelihood = self.score(X)
-        pbar = trange(self._n_iter)
+        if self.gamma is None:
+            self.gamma = 1.
+
+        l2 = self.score(X)
+        max_iter = self.n_iter
+        l1 = 0
+        l2_inf = 0
+        pbar = trange(self.n_iter)
         for _ in pbar:
-            old_likelihood = old_l
-            old_l = likelihood
+            l0 = l1
+            l1 = l2
             self.theta, self.gamma = self._update_params(X, numpy.array((self.theta, self.gamma)))
-            likelihood = self.score(X)
-            aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
-            aitken_acceleration = abs((likelihood - old_l) / (1 - aitken_acceleration))
+            l2 = self.score(X)
+            aitken_acceleration = (l2 - l1) / (l1 - l0)
+            l1_inf = l2_inf
+            l2_inf = l1 + (l2 - l1) / (1 - aitken_acceleration)
+            self.converged_ = abs(l2_inf - l1_inf) / (1 - aitken_acceleration) < self.tol
             pbar.set_description('acceleration = {}'.format(aitken_acceleration))
-            self.converged_ = abs((likelihood - old_l) / (1 - aitken_acceleration)) < self.tol
             if self.converged_:
                 if self.verbose:
                     print('Converged in {} iterations'.format(self._n_iter - max_iter + 1))
@@ -164,14 +154,6 @@ class rInvGauss:
         else:
             gamma = self.gamma
         return lambda t: numpy.mean([self.pdf(t, x, gamma) for x in X])
-
-    # def lcv(self, X, gamma):
-    #    X = list(X)
-    #    return numpy.mean([log(self.kde(X[:i]+X[i+1:], gamma)(x)) for i, x in enumerate(X)])
-    #
-    # def min_lcv(self, X):
-    #    gamma = fmin_bfgs(f=lambda g: self.lcv(X, g), x0=numpy.array([1.0]), disp=False)
-    #    return max((gamma[0], 0.001))
 
     def sample(self, n_sample=1):
         if n_sample < 1:
@@ -206,7 +188,7 @@ if __name__ == '__main__':
     sample = rInvGauss(theta=10, gamma=4.0).sample(1000)
 
     rIG1 = rInvGauss(gamma=4.0).fit(sample)
-    rIG2 = rInvGauss().fit(sample)
+    rIG2 = rInvGauss(max_iter=500).fit(sample)
 
     print(rIG1.get_parameters())
     print(rIG2.get_parameters())
