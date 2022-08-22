@@ -12,6 +12,7 @@ class rInvGauss:
         self.n_iter = max_iter
         self.tol = tol
         self.verbose = verbose
+        self.converged_ = False
 
     def _mu(self, theta, gamma):
         return sqrt(theta * (3 * gamma + theta))
@@ -135,10 +136,10 @@ class rInvGauss:
             l1 = l2
             self.theta, self.gamma = self._update_params(X, numpy.array((self.theta, self.gamma)))
             l2 = self.score(X)
-            aitken_acceleration = (l2 - l1) / (l1 - l0)
+            aitken_acceleration = (l2 - l1) / (l1 - l0) if abs(l1 - l0) > 0 else 0
             l1_inf = l2_inf
             l2_inf = l1 + (l2 - l1) / (1 - aitken_acceleration)
-            self.converged_ = abs(l2_inf - l1_inf) / (1 - aitken_acceleration) < self.tol
+            self.converged_ = abs(l2_inf - l1_inf) < self.tol
             pbar.set_description('acceleration = {}'.format(aitken_acceleration))
             if self.converged_:
                 if self.verbose:
@@ -185,7 +186,7 @@ if __name__ == '__main__':
     import os
     from scipy.stats import invgauss
 
-    sample = rInvGauss(theta=10, gamma=4.0).sample(1000)
+    sample = rInvGauss(theta=10, gamma=4.0).sample(100000)
 
     rIG1 = rInvGauss(gamma=4.0).fit(sample)
     rIG2 = rInvGauss(max_iter=500).fit(sample)

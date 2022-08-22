@@ -69,7 +69,7 @@ class rInvGaussMixtureCore:
         pass
 
     def _EM(self, XX, verbose=False, method='dogleg'):
-        assert all([xx > 0 for xx in XX]), "negative value"
+        assert all([xx > 0 for xx in XX]), "non-positive value"
         X = np.array(XX).copy()
         self.initialize(X)
 
@@ -92,10 +92,10 @@ class rInvGaussMixtureCore:
                 aitken_acceleration = (l2 - l1) / (l1 - l0)
                 l1_inf = l2_inf
                 l2_inf = l1 + (l2 - l1) / (1 - aitken_acceleration)
-                self.converged_ = abs(l2_inf - l1_inf) / (1 - aitken_acceleration) < self.tol
+                self.converged_ = abs(l2_inf - l1_inf) < self.tol
                 if self.converged_:
                     if self.verbose or verbose:
-                        print('Converged in {} iterations'.format(self.n_iter_ - max_iter + 1))
+                        print('Converged in {} iterations'.format(self.n_iter_ - max_iter - 1))
                     return self
                 pbar.set_description('acceleration = {}'.format(aitken_acceleration))
             print('Not converged...')
@@ -170,9 +170,8 @@ class rInvGaussMixture(rInvGaussMixtureCore):
         res = minimize(fun=LL, method=method, x0=x0, jac=grad_LL, hess=hess_LL)['x']
         return res
 
-    def initialize(self, X, method='kmeans'):
-        if method == 'kmeans':
-            kmeans = KMeans(self._n_components).fit(X.reshape(-1, 1))
+    def initialize(self, X, method=None):
+        kmeans = KMeans(self._n_components).fit(X.reshape(-1, 1))
 
         z = np.zeros((len(X), self._n_components))
         if self.weights_ is None:

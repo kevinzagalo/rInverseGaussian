@@ -20,7 +20,7 @@ class RTInvGaussMixture(rInvGaussMixtureCore):
             self.smooth_ = [smooth_init] * n_components
 
         if smooth_init and modes_init:
-            self.backlog_ = [self._backlog(m, smooth_init) for i, m in enumerate(modes_init)]
+            self.backlog_ = [self._backlog(m, smooth_init) for m in modes_init]
         else:
             self.backlog_ = None
 
@@ -105,9 +105,10 @@ if __name__ == '__main__':
     gamma = V / (1 - Ubar) ** 2
 
     n_components = 2
-
-    sample = pd.read_csv('data/task_30.csv')["0"].astype(float)
-    rIG = RTInvGaussMixture(n_components=n_components, smooth_init=gamma[30], utilization=U[30]).fit(sample, method='BFGS')
+    n_task = 30
+    sample = pd.read_csv('data/task_{}.csv'.format(n_task))["0"].astype(float)
+    rIG = RTInvGaussMixture(n_components=n_components, smooth_init=gamma[n_task],
+                            utilization=U[n_task]).fit(sample, method='BFGS')
     print(rIG.get_parameters())
 
     plt.hist(sample, density=True, bins=50, color='black')
