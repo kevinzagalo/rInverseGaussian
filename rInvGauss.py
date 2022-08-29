@@ -203,10 +203,10 @@ if __name__ == '__main__':
     plt.title('A generated sample with MLE')
     plt.show()
     # plt.hist(sample, density=True, bins=50)
-    # t_range = numpy.linspace(0.1, max(sample))
+ t_range = numpy.linspace(0.1, max(sample))
 #
-# kernel_t_range = [rIG.kde(sample)(tt) for tt in t_range]
-# plt.plot(t_range, kernel_t_range, color='red')
+ kernel_t_range = [rIG.kde(sample)(tt) for tt in t_range]
+ plt.plot(t_range, kernel_t_range, color='red')
 # plt.ylim(0, 0.8)
 # plt.title('A generated sample with kde')
 # plt.show()

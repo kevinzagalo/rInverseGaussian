@@ -110,7 +110,6 @@ if __name__ == '__main__':
     rIG = RTInvGaussMixture(n_components=n_components, smooth_init=gamma[n_task],
                             utilization=U[n_task]).fit(sample, method='BFGS')
     print(rIG.get_parameters())
-
     plt.hist(sample, density=True, bins=50, color='black')
     t_range = np.linspace(0.1, max(sample))
     plt.plot(t_range, rIG.pdf(t_range), color='red', label='gamma fixed')
