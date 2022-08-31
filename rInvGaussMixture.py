@@ -2,7 +2,7 @@ import numpy as np
 from math import sqrt, log, exp
 from scipy.optimize import minimize, fmin_bfgs
 from tqdm import trange
-from rInvGauss import rInvGauss
+from rInverseGaussian.rInvGauss import rInvGauss
 from sklearn.cluster import KMeans
 
 
@@ -96,8 +96,8 @@ class rInvGaussMixture:
             likelihood = self.score(X)
             max_iter = self.n_iter_
             old_l = 0
-
-            for _ in trange(self.n_iter_):
+            pbar = trange(self.n_iter_)
+            for _ in pbar:
                 max_iter -= 1
                 old_likelihood = old_l
                 old_l = likelihood
@@ -118,6 +118,7 @@ class rInvGaussMixture:
                     if self.verbose or verbose:
                         print('Converged in {} iterations'.format(self.n_iter_ - max_iter + 1))
                     return self
+                pbar.set_description('acceleration = {}'.format(aitken_acceleration))
             print('Not converged...')
         elif self._n_components == 1:
             uni = rInvGauss(theta=self.modes_[0] if self.modes_ else None,

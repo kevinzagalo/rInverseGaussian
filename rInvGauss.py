@@ -1,7 +1,7 @@
 import numpy
 from numpy import sqrt, log, exp
 from scipy.optimize import minimize
-
+from tqdm import trange
 
 class rInvGauss:
 
@@ -47,7 +47,7 @@ class rInvGauss:
         return self._lambd(self.theta, self.gamma)
 
     def pdf(self, x, theta=None, gamma=None):
-        self._checkvalues()
+        #self._checkvalues()
         if theta and gamma:  # In case we want to use only the pdf without the object parameters
             mu = self._mu(theta, gamma)
             lambd = self._lambd(theta, gamma)
@@ -139,22 +139,21 @@ class rInvGauss:
         if not self.gammaIsFixed:
             self.gamma = 1
         likelihood = self.score(X)
-
-        for _ in range(self._n_iter):
-            max_iter -= 1
+        pbar = trange(self._n_iter)
+        for _ in pbar:
             old_likelihood = old_l
             old_l = likelihood
-
             self.theta, self.gamma = self._update_params(X, numpy.array((self.theta, self.gamma)))
-
-            # score
             likelihood = self.score(X)
             aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
+            aitken_acceleration = abs((likelihood - old_l) / (1 - aitken_acceleration))
+            pbar.set_description('acceleration = {}'.format(aitken_acceleration))
             self.converged_ = abs((likelihood - old_l) / (1 - aitken_acceleration)) < self.tol
             if self.converged_:
                 if self.verbose:
                     print('Converged in {} iterations'.format(self._n_iter - max_iter + 1))
                 return self
+            max_iter -= 1
         print('Not converged...')
         return self
 
