@@ -3,20 +3,16 @@ from numpy import sqrt, log, exp
 from scipy.optimize import minimize
 from tqdm import trange
 
+
 class rInvGauss:
 
     def __init__(self, theta=None, gamma=None, tol=1e-4, max_iter=100, verbose=False):
         self.theta = theta
-
-        if gamma:
-            self.gammaIsFixed = True
-        else:
-            self.gammaIsFixed = False
         self.gamma = gamma
-
-        self._n_iter = max_iter
+        self.n_iter = max_iter
         self.tol = tol
         self.verbose = verbose
+        self.converged_ = False
 
     def _mu(self, theta, gamma):
         return sqrt(theta * (3 * gamma + theta))
@@ -25,10 +21,10 @@ class rInvGauss:
         return theta * (3 * gamma + theta) / gamma
 
     def _theta(self, mu, lambd):
-        return mu * (sqrt(1 + (1.5*mu/lambd)**2) - 1.5*mu/lambd)
+        return mu * (sqrt(1 + (1.5 * mu / lambd) ** 2) - 1.5 * mu / lambd)
 
     def _gamma(self, mu, lambd):
-        return mu**2/lambd
+        return mu ** 2 / lambd
 
     def _checkvalues(self):
         if self.theta <= 0 or self.gamma <= 0:
@@ -38,25 +34,23 @@ class rInvGauss:
 
     @property
     def mu(self):
-        self._checkvalues()
         return self._mu(self.theta, self.gamma)
 
     @property
     def lambd(self):
-        self._checkvalues()
         return self._lambd(self.theta, self.gamma)
 
     def pdf(self, x, theta=None, gamma=None):
-        #self._checkvalues()
+        self._checkvalues()
         if theta and gamma:  # In case we want to use only the pdf without the object parameters
             mu = self._mu(theta, gamma)
             lambd = self._lambd(theta, gamma)
         else:  # in case we use the object parameters
             mu = self.mu
             lambd = self.lambd
-        a1 = sqrt(lambd / (2 * numpy.pi * x**3))
-        a2 = lambd * (x - mu)**2 / (x * mu**2)
-        return a1 * exp(-a2/2)
+        a1 = sqrt(lambd / (2 * numpy.pi * x ** 3))
+        a2 = lambd * (x - mu) ** 2 / (x * mu ** 2)
+        return a1 * exp(-a2 / 2)
 
     def log_pdf(self, x, theta=None, gamma=None):
         self._checkvalues()
@@ -67,8 +61,8 @@ class rInvGauss:
             mu = self.mu
             lambd = self.lambd
         a1 = log(lambd) - log(2) - log(numpy.pi) - 3 * log(x)
-        a2 = lambd * (x - mu)**2 / (x * mu**2)
-        return a1/2 - a2/2
+        a2 = lambd * (x - mu) ** 2 / (x * mu ** 2)
+        return a1 / 2 - a2 / 2
 
     def _dlogf(self, x, theta=None, gamma=None):
         self._checkvalues()
@@ -84,11 +78,11 @@ class rInvGauss:
                      + 1.5 * gamma / (theta * p) \
                      + sqrt(theta) / (2 * gamma * sqrt(p)) \
                      + sqrt(p / theta) / (2 * gamma)
-        dLL_dgamma = x / (2 * gamma**2) \
-                     + theta**2 / (2 * x * gamma**2) \
+        dLL_dgamma = x / (2 * gamma ** 2) \
+                     + theta ** 2 / (2 * x * gamma ** 2) \
                      - theta / (2 * gamma * p) \
                      + 1.5 * sqrt(theta) / (gamma * sqrt(p)) \
-                     - sqrt(theta * p) / gamma**2
+                     - sqrt(theta * p) / gamma ** 2
         return numpy.array([dLL_dtheta, dLL_dgamma])
 
     def _hesslogf(self, x, theta=None, gamma=None):
@@ -99,56 +93,54 @@ class rInvGauss:
             theta = self.theta
             gamma = self.gamma
         p = 3 * gamma + theta
-        dLL_dtheta2 = -0.25 * (4 / (x * gamma) + 2 / (theta**2) + 2 / (p**2) + 9 * gamma / sqrt(theta * p)**3)
-        dLL_dgamma2 = -x / (gamma**3) \
-                      - theta**2 / (x * gamma**3) \
-                      + 1.5 * theta / (gamma * p**2) \
-                      - 9 * sqrt(theta) / (4 * gamma * sqrt(p)**3) \
-                      + theta / (2 * gamma**2 * p) \
-                      - 3 * sqrt(theta) / (gamma**2 * sqrt(p)) \
-                      + 2 * sqrt(theta * p) / gamma**3
-        dLL_dtheta_dgamma = theta / (x * gamma**2) \
-                            - (27 * gamma**3 + 30 * gamma * theta**2 \
-                               + 4 * theta**3 \
-                               + 3 * gamma**2 * (21 * theta + 2 * sqrt(theta * p))) \
-                            / (4 * gamma ** 2 * sqrt(theta * p**5))
+        dLL_dtheta2 = -0.25 * (4 / (x * gamma) + 2 / (theta ** 2) + 2 / (p ** 2) + 9 * gamma / sqrt(theta * p) ** 3)
+        dLL_dgamma2 = -x / (gamma ** 3) \
+                      - theta ** 2 / (x * gamma ** 3) \
+                      + 1.5 * theta / (gamma * p ** 2) \
+                      - 9 * sqrt(theta) / (4 * gamma * sqrt(p) ** 3) \
+                      + theta / (2 * gamma ** 2 * p) \
+                      - 3 * sqrt(theta) / (gamma ** 2 * sqrt(p)) \
+                      + 2 * sqrt(theta * p) / gamma ** 3
+        dLL_dtheta_dgamma = theta / (x * gamma ** 2) \
+                            - (27 * gamma ** 3 + 30 * gamma * theta ** 2 \
+                               + 4 * theta ** 3 \
+                               + 3 * gamma ** 2 * (21 * theta + 2 * sqrt(theta * p))) \
+                            / (4 * gamma ** 2 * sqrt(theta * p ** 5))
         return numpy.matrix([[dLL_dtheta2, dLL_dtheta_dgamma], [dLL_dtheta_dgamma, dLL_dgamma2]])
 
     def score(self, X, y=None, theta=None, gamma=None):
         return sum([self.log_pdf(x, theta, gamma) for x in X])
 
     def _update_params(self, XX, x0):
-        if self.gammaIsFixed:
-            hess_LL = lambda y: sum([-self._hesslogf(x, y[0], x0[1]) for x in XX])
-            grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], x0[1]) for x in XX]).sum(axis=0)
-            LL = lambda y: -self.score(XX, theta=y[0], gamma=x0[1])
-            res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x'][0], x0[1]
-        else:
-            hess_LL = lambda y: sum([-self._hesslogf(x, y[0], y[1]) for x in XX])
-            grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], y[1]) for x in XX]).sum(axis=0)
-            LL = lambda y: -self.score(XX, theta=y[0], gamma=y[1])
-            res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x']
+        hess_LL = lambda y: sum([-self._hesslogf(x, y[0], y[1]) for x in XX])
+        grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], y[1]) for x in XX]).sum(axis=0)
+        LL = lambda y: -self.score(XX, theta=y[0], gamma=y[1])
+        res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x']
         return res
 
     def fit(self, XX):
         X = numpy.array(XX).copy()
-        max_iter = self._n_iter
-        old_l = 0
+
         if self.theta is None:
             self.theta = numpy.mean(X)
-        if not self.gammaIsFixed:
-            self.gamma = 1
-        likelihood = self.score(X)
-        pbar = trange(self._n_iter)
+        if self.gamma is None:
+            self.gamma = 1.
+
+        l2 = self.score(X)
+        max_iter = self.n_iter
+        l1 = 0
+        l2_inf = 0
+        pbar = trange(self.n_iter)
         for _ in pbar:
-            old_likelihood = old_l
-            old_l = likelihood
+            l0 = l1
+            l1 = l2
             self.theta, self.gamma = self._update_params(X, numpy.array((self.theta, self.gamma)))
-            likelihood = self.score(X)
-            aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
-            aitken_acceleration = abs((likelihood - old_l) / (1 - aitken_acceleration))
+            l2 = self.score(X)
+            aitken_acceleration = (l2 - l1) / (l1 - l0) if abs(l1 - l0) > 0 else 0
+            l1_inf = l2_inf
+            l2_inf = l1 + (l2 - l1) / (1 - aitken_acceleration)
+            self.converged_ = abs(l2_inf - l1_inf) < self.tol
             pbar.set_description('acceleration = {}'.format(aitken_acceleration))
-            self.converged_ = abs((likelihood - old_l) / (1 - aitken_acceleration)) < self.tol
             if self.converged_:
                 if self.verbose:
                     print('Converged in {} iterations'.format(self._n_iter - max_iter + 1))
@@ -164,14 +156,6 @@ class rInvGauss:
             gamma = self.gamma
         return lambda t: numpy.mean([self.pdf(t, x, gamma) for x in X])
 
-    #def lcv(self, X, gamma):
-    #    X = list(X)
-    #    return numpy.mean([log(self.kde(X[:i]+X[i+1:], gamma)(x)) for i, x in enumerate(X)])
-#
-    #def min_lcv(self, X):
-    #    gamma = fmin_bfgs(f=lambda g: self.lcv(X, g), x0=numpy.array([1.0]), disp=False)
-    #    return max((gamma[0], 0.001))
-
     def sample(self, n_sample=1):
         if n_sample < 1:
             raise ValueError(
@@ -179,20 +163,22 @@ class rInvGauss:
             )
 
         # https://fr.wikipedia.org/wiki/Loi_inverse-gaussienne#Simulation_num%C3%A9rique_de_la_loi_inverse-gaussienne
-        y = numpy.random.normal(size=n_sample)**2
-        X = self.mu + (self.mu**2 * y - self.mu * numpy.sqrt(4 * self.mu * self.lambd * y + self.mu**2 * y**2)) / (2 * self.lambd)
+        y = numpy.random.normal(size=n_sample) ** 2
+        X = self.mu + (
+                    self.mu ** 2 * y - self.mu * numpy.sqrt(4 * self.mu * self.lambd * y + self.mu ** 2 * y ** 2)) / (
+                        2 * self.lambd)
         U = numpy.random.rand(n_sample)
         S = numpy.zeros(n_sample)
         Z = self.mu / (self.mu + X)
         ok = (U <= Z)
         notok = (U > Z)
         S[ok] = X[ok]
-        S[notok] = self.mu**2 / X[notok]
+        S[notok] = self.mu ** 2 / X[notok]
         return S
 
     def get_parameters(self):
         return {'mode': self.theta, 'shape': self.gamma}
-    
+
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -200,10 +186,10 @@ if __name__ == '__main__':
     import os
     from scipy.stats import invgauss
 
-    sample = rInvGauss(theta=10, gamma=4.0).sample(1000)
+    sample = rInvGauss(theta=10, gamma=4.0).sample(100000)
 
     rIG1 = rInvGauss(gamma=4.0).fit(sample)
-    rIG2 = rInvGauss().fit(sample)
+    rIG2 = rInvGauss(max_iter=500).fit(sample)
 
     print(rIG1.get_parameters())
     print(rIG2.get_parameters())
@@ -212,15 +198,15 @@ if __name__ == '__main__':
     t_range = numpy.linspace(0.1, max(sample))
     plt.plot(t_range, rIG1.pdf(t_range), color='red', label='gamma fixed')
     plt.plot(t_range, rIG2.pdf(t_range), color='blue', label='gamma not fixed')
-    #plt.ylim(0, 0.8)
+    # plt.ylim(0, 0.8)
     plt.legend()
     plt.title('A generated sample with MLE')
     plt.show()
-    #plt.hist(sample, density=True, bins=50)
-    #t_range = numpy.linspace(0.1, max(sample))
+    # plt.hist(sample, density=True, bins=50)
+ t_range = numpy.linspace(0.1, max(sample))
 #
-    #kernel_t_range = [rIG.kde(sample)(tt) for tt in t_range]
-    #plt.plot(t_range, kernel_t_range, color='red')
-    #plt.ylim(0, 0.8)
-    #plt.title('A generated sample with kde')
-    #plt.show()
+ kernel_t_range = [rIG.kde(sample)(tt) for tt in t_range]
+ plt.plot(t_range, kernel_t_range, color='red')
+# plt.ylim(0, 0.8)
+# plt.title('A generated sample with kde')
+# plt.show()

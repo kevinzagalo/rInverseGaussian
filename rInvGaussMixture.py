@@ -2,33 +2,24 @@ import numpy as np
 from math import sqrt, log, exp
 from scipy.optimize import minimize, fmin_bfgs
 from tqdm import trange
-from rInverseGaussian.rInvGauss import rInvGauss
+from rInvGauss import rInvGauss
 from sklearn.cluster import KMeans
+import abc
 
+class rInvGaussMixtureCore:
 
-class rInvGaussMixture:
-
-    def __init__(self, n_components, max_iter=100, tol=1e-4, modes_init=None, shapes_init=None,
+    def __init__(self, n_components, max_iter=100, tol=1e-4, modes_init=None,
                  smooth_init=None, weights_init=None, verbose=False):
         self.tol = tol
         self.n_iter_ = max_iter
         self.verbose = verbose
         self._n_components = n_components
-        self.gammaIsFixed = False
 
-        if weights_init:
+        if weights_init is not None:
             assert len(weights_init) == self._n_components, 'Weights lengths should be equal to n_components'
 
-        if modes_init:
+        if modes_init is not None:
             assert len(modes_init) == self._n_components, 'Modes lengths should be equal to n_components'
-
-        if smooth_init:
-            assert len(smooth_init) == self._n_components, 'Smooth lengths should be equal to n_components'
-            self.gammaIsFixed = True
-
-        if shapes_init:
-            smooth_init = shapes_init
-            print('shapes_init is deprecated, please use smooth_init instead in the future')
 
         self.modes_ = modes_init
         self.smooth_ = smooth_init
@@ -56,18 +47,9 @@ class rInvGaussMixture:
             zz[i, :] = np.array(self._proba_components(x_i)) / self.pdf(x_i)
         return zz
 
+    @abc.abstractmethod
     def _update_params(self, XX, zz, x0):
-        if self.gammaIsFixed:
-            hess_LL = lambda y: -self._second_derivative_complete_likelihood(XX, zz, y[0], x0[1])
-            grad_LL = lambda y: -self._derivative_complete_likelihood(XX, zz, y[0], x0[1])
-            LL = lambda y: -self._complete_likelihood(XX, zz, y[0], x0[1])
-            res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x'][0], x0[1]
-        else:
-            hess_LL = lambda x: -self._second_derivative_complete_likelihood(XX, zz, x[0], x[1])
-            grad_LL = lambda x: -self._derivative_complete_likelihood(XX, zz, x[0], x[1])
-            LL = lambda x: -self._complete_likelihood(XX, zz, x[0], x[1])
-            res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x']
-        return res
+        pass
 
     def _score_complete(self, X, z):
         l1 = sum([sum([z[i, j] * log(pi_j) for j, pi_j in enumerate(self.weights_)]) for i, _ in enumerate(X)])
@@ -78,45 +60,42 @@ class rInvGaussMixture:
     def score(self, X, y=None):
         return sum([log(self.pdf(x)) for x in X])
 
-    def _EM(self, XX, verbose=False):
+    @abc.abstractmethod
+    def initialize(self, X, method='kmeans'):
+        pass
+
+    @abc.abstractmethod
+    def _M_step(self, X, z, method):
+        pass
+
+    def _EM(self, XX, verbose=False, method='dogleg'):
+        assert all([xx > 0 for xx in XX]), "non-positive value"
         X = np.array(XX).copy()
-        kmeans = KMeans(self._n_components).fit(X.reshape(-1, 1))
-
-        z = np.zeros((len(X), self._n_components))
-        if self.weights_ is None:
-            for i, j in enumerate(kmeans.predict(X.reshape(-1, 1))):
-                z[i, j] = 1
-            self.weights_ = np.mean(z, axis=0).tolist()
-
-        self.modes_ = kmeans.cluster_centers_.reshape(-1)
-        if not self.gammaIsFixed:
-            self.smooth_ = [1.] * self._n_components
+        self.initialize(X)
 
         if self._n_components > 1:
-            likelihood = self.score(X)
+            l2 = self.score(X)
             max_iter = self.n_iter_
-            old_l = 0
+            l1 = 0
+            l2_inf = 0
             pbar = trange(self.n_iter_)
             for _ in pbar:
                 max_iter -= 1
-                old_likelihood = old_l
-                old_l = likelihood
-
-                # E-step
+                # E step
                 z = self._update_weights(X)
-
-                # M-step
-                self.weights_ = np.mean(z, axis=0).tolist()
-                for j in range(self._n_components):
-                    self.modes_[j], self.smooth_[j] = self._update_params(X, z[:, j],
-                                                                          np.array((self.modes_[j], self.smooth_[j])))
+                # M step
+                self._M_step(X, z, method)
                 # score
-                likelihood = self.score(X)
-                aitken_acceleration = (likelihood - old_l) / (old_l - old_likelihood)
-                self.converged_ = abs((likelihood - old_l)/(1-aitken_acceleration)) < self.tol
+                l0 = l1
+                l1 = l2
+                l2 = self.score(X)
+                aitken_acceleration = (l2 - l1) / (l1 - l0)
+                l1_inf = l2_inf
+                l2_inf = l1 + (l2 - l1) / (1 - aitken_acceleration)
+                self.converged_ = abs(l2_inf - l1_inf) < self.tol
                 if self.converged_:
                     if self.verbose or verbose:
-                        print('Converged in {} iterations'.format(self.n_iter_ - max_iter + 1))
+                        print('Converged in {} iterations'.format(self.n_iter_ - max_iter - 1))
                     return self
                 pbar.set_description('acceleration = {}'.format(aitken_acceleration))
             print('Not converged...')
@@ -128,9 +107,9 @@ class rInvGaussMixture:
             self.smooth_ = [uni.gamma]
             self.weights_ = [1.]
         return self
-    
-    def fit(self, X, y=None, verbose=False, method='EM'):
-        return self._EM(X, verbose=verbose)
+
+    def fit(self, X, y=None, verbose=False, method='dogleg'):
+        return self._EM(X, verbose=verbose, method=method)
 
     def aic(self, X):
         return 2 * len(X) * self.score(X) - (3 * self._n_components - 1) * 2
@@ -161,16 +140,55 @@ class rInvGaussMixture:
         for i, k in enumerate(clusters_):
             mu[i] = rInvGauss(theta=self.modes_[k], gamma=self.smooth_[k]).mu
             lambd[i] = rInvGauss(theta=self.modes_[k], gamma=self.smooth_[k]).lambd
-        y = np.random.normal(size=n_sample)**2
-        X = mu + (mu**2 * y - mu * np.sqrt(4 * mu * lambd * y +mu**2 * y**2)) / (2 * lambd)
+        y = np.random.normal(size=n_sample) ** 2
+        X = mu + (mu ** 2 * y - mu * np.sqrt(4 * mu * lambd * y + mu ** 2 * y ** 2)) / (2 * lambd)
         U = np.random.rand(n_sample)
         S = np.zeros(n_sample)
         Z = mu / (mu + X)
         ok = (U <= Z)
+
         notok = (U > Z)
         S[ok] = X[ok]
-        S[notok] = mu[notok]**2 / X[notok]
+        S[notok] = mu[notok] ** 2 / X[notok]
         return S
+
+    @abc.abstractmethod
+    def get_parameters(self):
+        pass
+
+
+class rInvGaussMixture(rInvGaussMixtureCore):
+    def __init__(self, n_components, max_iter=100, tol=1e-4, modes_init=None,
+                 smooth_init=None, weights_init=None, verbose=False):
+        super().__init__(n_components=n_components, tol=tol, max_iter=max_iter, modes_init=modes_init,
+                         weights_init=weights_init, verbose=verbose, smooth_init=smooth_init)
+
+    def _update_params(self, XX, zz, x0, method='dogleg'):
+        hess_LL = lambda x: -self._second_derivative_complete_likelihood(XX, zz, x[0], x[1])
+        grad_LL = lambda x: -self._derivative_complete_likelihood(XX, zz, x[0], x[1])
+        LL = lambda x: -self._complete_likelihood(XX, zz, x[0], x[1])
+        res = minimize(fun=LL, method=method, x0=x0, jac=grad_LL, hess=hess_LL)['x']
+        return res
+
+    def initialize(self, X, method=None):
+        kmeans = KMeans(self._n_components).fit(X.reshape(-1, 1))
+
+        z = np.zeros((len(X), self._n_components))
+        if self.weights_ is None:
+            for i, j in enumerate(kmeans.predict(X.reshape(-1, 1))):
+                z[i, j] = 1
+            self.weights_ = np.mean(z, axis=0).tolist()
+
+        self.modes_ = kmeans.cluster_centers_.reshape(-1)
+        if self.smooth_ is None:
+            self.smooth_ = [1.] * self._n_components
+
+    def _M_step(self, X, z, method):
+        self.weights_ = np.mean(z, axis=0).tolist()
+        for j in range(self._n_components):
+            self.modes_[j], self.smooth_[j] = self._update_params(X, z[:, j], method=method,
+                                                                  x0=np.array((self.modes_[j], self.smooth_[j])))
+        return 0
 
     def get_parameters(self):
         return {'weights': self.weights_, 'modes': self.modes_,
@@ -182,7 +200,8 @@ if __name__ == '__main__':
     import pandas as pd
     import os
 
-    sample = rInvGaussMixture(n_components=2, weights_init=[0.3, 0.7], modes_init=[10, 100], smooth_init=[1, 4.0]).sample(10000)
+    sample = rInvGaussMixture(n_components=2, weights_init=[0.3, 0.7], modes_init=[10, 100],
+                              smooth_init=[1, 4.0]).sample(1000)
 
     rIG1 = rInvGaussMixture(n_components=2, smooth_init=[1, 4.0]).fit(sample)
     rIG2 = rInvGaussMixture(n_components=2).fit(sample)
@@ -194,13 +213,13 @@ if __name__ == '__main__':
     t_range = np.linspace(0.1, max(sample))
     plt.plot(t_range, rIG1.pdf(t_range), color='red', label='gamma fixed')
     plt.plot(t_range, rIG2.pdf(t_range), color='blue', label='gamma not fixed')
-    #plt.ylim(0, 0.8)
+    # plt.ylim(0, 0.8)
     plt.legend()
     plt.title('A generated sample with MLE')
     plt.show()
 
 
-    #for f in os.listdir('data'):
+    # for f in os.listdir('data'):
     #    if 'xtimes' in f or 'pdf' in f:
     #        continue
     #    print(f)
@@ -218,26 +237,26 @@ if __name__ == '__main__':
     #    plt.savefig('data/{}.pdf'.format(f[:-6]))
     #    plt.show()
 
-    #x = pd.read_csv('data/actl_5.csv').values[:, 1]
+    # x = pd.read_csv('data/actl_5.csv').values[:, 1]
 #
-    #BICS = []
-    #AICS = []
-    #t_range = np.linspace(1, max(x))
-    #plt.hist(x, density=True)
-    #for n_components in range(2, 10):
-    #    rIG = rInvGaussMixture(n_components).fit(x)
-    #    plt.plot(t_range, rIG.pdf(t_range), label='n_component={}'.format(n_components), ls='dotted')
-    #    BICS.append(rIG.bic(x))
-    #    AICS.append(rIG.aic(x))
-    #plt.show()
+# BICS = []
+# AICS = []
+# t_range = np.linspace(1, max(x))
+# plt.hist(x, density=True)
+# for n_components in range(2, 10):
+#    rIG = rInvGaussMixture(n_components).fit(x)
+#    plt.plot(t_range, rIG.pdf(t_range), label='n_component={}'.format(n_components), ls='dotted')
+#    BICS.append(rIG.bic(x))
+#    AICS.append(rIG.aic(x))
+# plt.show()
 #
-    #fig, ax = plt.subplots()
-    #ax.plot(range(2, 10), BICS, label='BIC')
-    #ax_ = ax.twinx()
-    #ax.set_ylabel('BIC')
-    #plt.xlabel('m')
-    #ax_.plot(range(2, 10), AICS, label='AIC')
-    #ax_.set_ylabel('AIC')
-    #plt.legend()
-    #plt.show()
+# fig, ax = plt.subplots()
+# ax.plot(range(2, 10), BICS, label='BIC')
+# ax_ = ax.twinx()
+# ax.set_ylabel('BIC')
+# plt.xlabel('m')
+# ax_.plot(range(2, 10), AICS, label='AIC')
+# ax_.set_ylabel('AIC')
+# plt.legend()
+# plt.show()
 
