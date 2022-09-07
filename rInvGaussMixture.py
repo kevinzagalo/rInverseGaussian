@@ -32,14 +32,14 @@ class rInvGaussMixtureCore:
     def pdf(self, x):
         return sum(self._proba_components(x))
 
-    def _complete_likelihood(self, X, zz, theta, gamma):
-        return sum([zz[i] * rInvGauss(theta, gamma).log_pdf(x_i) for i, x_i in enumerate(X)])
+    def _complete_likelihood(self, X, zz, mode, cv):
+        return sum([zz[i] * rInvGauss(mode, cv).log_pdf(x_i) for i, x_i in enumerate(X)])
 
-    def _derivative_complete_likelihood(self, X, zz, theta, gamma):
-        return np.array([zz[i] * rInvGauss(theta, gamma)._dlogf(x_i) for i, x_i in enumerate(X)]).sum(axis=0)
+    def _derivative_complete_likelihood(self, X, zz, mode, cv):
+        return np.array([zz[i] * rInvGauss(mode, cv)._dlogf(x_i) for i, x_i in enumerate(X)]).sum(axis=0)
 
-    def _second_derivative_complete_likelihood(self, X, zz, theta, gamma):
-        return sum([zz[i] * rInvGauss(theta, gamma)._hesslogf(x_i) for i, x_i in enumerate(X)])
+    def _second_derivative_complete_likelihood(self, X, zz, mode, cv):
+        return sum([zz[i] * rInvGauss(mode, cv)._hesslogf(x_i) for i, x_i in enumerate(X)])
 
     def _update_weights(self, X):
         zz = np.zeros((len(X), self._n_components))
@@ -132,7 +132,7 @@ class rInvGaussMixtureCore:
         if n_sample < 1:
             raise ValueError(
                 "Invalid value for 'n_samples': %d . The sampling requires at "
-                "least one sample." % (self.n_components)
+                "least one sample." % (self._n_components)
             )
 
         # https://fr.wikipedia.org/wiki/Loi_inverse-gaussienne#Simulation_num%C3%A9rique_de_la_loi_inverse-gaussienne
@@ -140,8 +140,8 @@ class rInvGaussMixtureCore:
         mu = np.zeros(n_sample)
         lambd = np.zeros(n_sample)
         for i, k in enumerate(clusters_):
-            mu[i] = rInvGauss(theta=self.modes_[k], gamma=self.cv_[k]).mean
-            lambd[i] = rInvGauss(theta=self.modes_[k], gamma=self.cv_[k]).shape
+            mu[i] = rInvGauss(mode=self.modes_[k], cv=self.cv_[k]).mean
+            lambd[i] = rInvGauss(mode=self.modes_[k], cv=self.cv_[k]).shape
         y = np.random.normal(size=n_sample) ** 2
         X = mu + (mu ** 2 * y - mu * np.sqrt(4 * mu * lambd * y + mu ** 2 * y ** 2)) / (2 * lambd)
         U = np.random.rand(n_sample)
@@ -161,9 +161,9 @@ class rInvGaussMixtureCore:
 
 class rInvGaussMixture(rInvGaussMixtureCore):
     def __init__(self, n_components, max_iter=100, tol=1e-4, modes_init=None,
-                 smooth_init=None, weights_init=None, verbose=False):
+                 cv_init=None, weights_init=None, verbose=False):
         super().__init__(n_components=n_components, tol=tol, max_iter=max_iter, modes_init=modes_init,
-                         weights_init=weights_init, verbose=verbose, smooth_init=smooth_init)
+                         weights_init=weights_init, verbose=verbose, cv_init=cv_init)
 
     def _update_params(self, XX, zz, x0, method='dogleg'):
         hess_LL = lambda x: -self._second_derivative_complete_likelihood(XX, zz, x[0], x[1])
@@ -183,18 +183,18 @@ class rInvGaussMixture(rInvGaussMixtureCore):
 
         self.modes_ = kmeans.cluster_centers_.reshape(-1)
         if self.cv_ is None:
-            self.smooth_ = [1.] * self._n_components
+            self.cv_ = [1.] * self._n_components
 
     def _M_step(self, X, z, method):
         self.weights_ = np.mean(z, axis=0).tolist()
         for j in range(self._n_components):
-            self.modes_[j], self.smooth_[j] = self._update_params(X, z[:, j], method=method,
-                                                                  x0=np.array((self.modes_[j], self.smooth_[j])))
+            self.modes_[j], self.cv_[j] = self._update_params(X, z[:, j], method=method,
+                                                              x0=np.array((self.modes_[j], self.cv_[j])))
         return 0
 
     def get_parameters(self):
         return {'weights': self.weights_, 'modes': self.modes_,
-                'smooth': self.smooth_, 'n_components': self._n_components}
+                'cv': self.cv_, 'n_components': self._n_components}
 
 
 if __name__ == '__main__':
@@ -203,9 +203,9 @@ if __name__ == '__main__':
     import os
 
     sample = rInvGaussMixture(n_components=2, weights_init=[0.3, 0.7], modes_init=[10, 100],
-                              smooth_init=[1, 4.0]).sample(1000)
+                              cv_init=[1, 4.0]).sample(1000)
 
-    rIG1 = rInvGaussMixture(n_components=2, smooth_init=[1, 4.0]).fit(sample)
+    rIG1 = rInvGaussMixture(n_components=2, cv_init=[1, 4.0]).fit(sample)
     rIG2 = rInvGaussMixture(n_components=2).fit(sample)
 
     print(rIG1.get_parameters())

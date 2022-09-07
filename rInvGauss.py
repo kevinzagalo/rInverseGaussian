@@ -52,11 +52,11 @@ class rInvGauss:
         a2 = lambd * (x - mu) ** 2 / (x * mu ** 2)
         return a1 * exp(-a2 / 2)
 
-    def log_pdf(self, x, theta=None, gamma=None):
+    def log_pdf(self, x, mode=None, cv=None):
         self._checkvalues()
-        if theta and gamma:  # In case we want to use only the pdf without the object parameters
-            mu = self._mean(theta, gamma)
-            lambd = self._shape(theta, gamma)
+        if mode and cv:  # In case we want to use only the pdf without the object parameters
+            mu = self._mean(mode, cv)
+            lambd = self._shape(mode, cv)
         else:  # in case we use the object parameters
             mu = self.mean
             lambd = self.shape
@@ -64,57 +64,57 @@ class rInvGauss:
         a2 = lambd * (x - mu) ** 2 / (x * mu ** 2)
         return a1 / 2 - a2 / 2
 
-    def _dlogf(self, x, theta=None, gamma=None):
+    def _dlogf(self, x, mode=None, cv=None):
         self._checkvalues()
-        if theta and gamma:
+        if mode and cv:
             pass
         else:
-            theta = self.mode
-            gamma = self.cv
-        p = 3 * gamma + theta
-        dLL_dtheta = - 1.5 / x \
-                     - theta / (x * gamma) \
+            mode = self.mode
+            cv = self.cv
+        p = 3 * cv + mode
+        dLL_dmu = - 1.5 / x \
+                     - mode / (x * cv) \
                      + 1 / p \
-                     + 1.5 * gamma / (theta * p) \
-                     + sqrt(theta) / (2 * gamma * sqrt(p)) \
-                     + sqrt(p / theta) / (2 * gamma)
-        dLL_dgamma = x / (2 * gamma ** 2) \
-                     + theta ** 2 / (2 * x * gamma ** 2) \
-                     - theta / (2 * gamma * p) \
-                     + 1.5 * sqrt(theta) / (gamma * sqrt(p)) \
-                     - sqrt(theta * p) / gamma ** 2
-        return numpy.array([dLL_dtheta, dLL_dgamma])
+                     + 1.5 * cv / (mode * p) \
+                     + sqrt(mode) / (2 * cv * sqrt(p)) \
+                     + sqrt(p / mode) / (2 * cv)
+        dLL_dgamma = x / (2 * cv ** 2) \
+                     + mode ** 2 / (2 * x * cv ** 2) \
+                     - mode / (2 * cv * p) \
+                     + 1.5 * sqrt(mode) / (cv * sqrt(p)) \
+                     - sqrt(mode * p) / cv ** 2
+        return numpy.array([dLL_dmu, dLL_dgamma])
 
-    def _hesslogf(self, x, theta=None, gamma=None):
+    def _hesslogf(self, x, mode=None, cv=None):
         self._checkvalues()
-        if theta and gamma:
+        if mode and cv:
             pass
         else:
-            theta = self.mode
-            gamma = self.cv
-        p = 3 * gamma + theta
-        dLL_dtheta2 = -0.25 * (4 / (x * gamma) + 2 / (theta ** 2) + 2 / (p ** 2) + 9 * gamma / sqrt(theta * p) ** 3)
-        dLL_dgamma2 = -x / (gamma ** 3) \
-                      - theta ** 2 / (x * gamma ** 3) \
-                      + 1.5 * theta / (gamma * p ** 2) \
-                      - 9 * sqrt(theta) / (4 * gamma * sqrt(p) ** 3) \
-                      + theta / (2 * gamma ** 2 * p) \
-                      - 3 * sqrt(theta) / (gamma ** 2 * sqrt(p)) \
-                      + 2 * sqrt(theta * p) / gamma ** 3
-        dLL_dtheta_dgamma = theta / (x * gamma ** 2) \
-                            - (27 * gamma ** 3 + 30 * gamma * theta ** 2 \
-                               + 4 * theta ** 3 \
-                               + 3 * gamma ** 2 * (21 * theta + 2 * sqrt(theta * p))) \
-                            / (4 * gamma ** 2 * sqrt(theta * p ** 5))
+            mode = self.mode
+            cv = self.cv
+        p = 3 * cv + mode
+        dLL_dtheta2 = -0.25 * (4 / (x * cv) + 2 / (mode ** 2) + 2 / (p ** 2) + 9 * cv / sqrt(mode * p) ** 3)
+        dLL_dgamma2 = -x / (cv ** 3) \
+                      - mode ** 2 / (x * cv ** 3) \
+                      + 1.5 * mode / (cv * p ** 2) \
+                      - 9 * sqrt(mode) / (4 * cv * sqrt(p) ** 3) \
+                      + mode / (2 * cv ** 2 * p) \
+                      - 3 * sqrt(mode) / (cv ** 2 * sqrt(p)) \
+                      + 2 * sqrt(mode * p) / cv ** 3
+        dLL_dtheta_dgamma = mode / (x * cv ** 2) \
+                            - (27 * cv ** 3 + 30 * cv * mode ** 2 \
+                               + 4 * mode ** 3 \
+                               + 3 * cv ** 2 * (21 * mode + 2 * sqrt(mode * p))) \
+                            / (4 * cv ** 2 * sqrt(mode * p ** 5))
         return numpy.matrix([[dLL_dtheta2, dLL_dtheta_dgamma], [dLL_dtheta_dgamma, dLL_dgamma2]])
 
-    def score(self, X, y=None, theta=None, gamma=None):
-        return sum([self.log_pdf(x, theta, gamma) for x in X])
+    def score(self, X, y=None, mode=None, cv=None):
+        return sum([self.log_pdf(x, mode, cv) for x in X])
 
     def _update_params(self, XX, x0):
         hess_LL = lambda y: sum([-self._hesslogf(x, y[0], y[1]) for x in XX])
         grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], y[1]) for x in XX]).sum(axis=0)
-        LL = lambda y: -self.score(XX, theta=y[0], gamma=y[1])
+        LL = lambda y: -self.score(XX, mode=y[0], cv=y[1])
         res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x']
         return res
 
@@ -143,7 +143,7 @@ class rInvGauss:
             pbar.set_description('acceleration = {}'.format(aitken_acceleration))
             if self.converged_:
                 if self.verbose:
-                    print('Converged in {} iterations'.format(self._n_iter - max_iter + 1))
+                    print('Converged in {} iterations'.format(self.n_iter - max_iter + 1))
                 return self
             max_iter -= 1
         print('Not converged...')
@@ -177,7 +177,7 @@ class rInvGauss:
         return S
 
     def get_parameters(self):
-        return {'mode': self.mode, 'smooth': self.cv}
+        return {'mode': self.mode, 'cv': self.cv}
 
 
 if __name__ == '__main__':
