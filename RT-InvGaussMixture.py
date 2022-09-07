@@ -1,6 +1,6 @@
 import numpy as np
 from math import sqrt, log, exp
-from scipy.optimize import minimize, fmin_bfgs
+from scipy.optimize import minimize, fmin_bfgs, minimize_scalar, root_scalar
 from tqdm import trange
 from rInvGauss import rInvGauss
 from rInvGaussMixture import rInvGaussMixtureCore, rInvGaussMixture
@@ -9,35 +9,51 @@ from sklearn.cluster import KMeans
 
 class RTInvGaussMixture(rInvGaussMixtureCore):
 
-    def __init__(self, n_components, smooth_init, max_iter=100, tol=1e-4, modes_init=None,
+    def __init__(self, n_components, cv_init, max_iter=100, tol=1e-4, modes_init=None,
                  weights_init=None, verbose=False, utilization=None):
 
         super().__init__(n_components=n_components, tol=tol, max_iter=max_iter, modes_init=modes_init,
-                         smooth_init=smooth_init, weights_init=weights_init, verbose=verbose)
+                         cv_init=cv_init, weights_init=weights_init, verbose=verbose)
         self.utilization = utilization
 
-        if smooth_init is not None and (isinstance(smooth_init, int) or isinstance(smooth_init, float)):
-            self.smooth_ = [smooth_init] * n_components
+        if cv_init is not None and (isinstance(cv_init, int) or isinstance(cv_init, float)):
+            self.cv_ = [cv_init] * n_components
 
-        if smooth_init and modes_init:
-            self.backlog_ = [self._backlog(m, smooth_init) for m in modes_init]
+        if cv_init and modes_init:
+            self.backlog_ = [self._backlog(m, cv_init) for m in modes_init]
         else:
             self.backlog_ = None
 
     def _mode(self, backlog=None):
-        return sqrt((backlog / (1 - self.utilization))**2 + (1.5 * self.smooth_[0])**2) - 1.5 * self.smooth_[0]
+        return sqrt((backlog / (1 - self.utilization)) ** 2 + (1.5 * self.cv_[0]) ** 2) - 1.5 * self.cv_[0]
 
     def _backlog(self, theta, gamma):
         return (1 - self.utilization) * sqrt(theta) * sqrt(theta + 3 * gamma)
     
     def dtheta_dbacklog(self, backlog):
-        return backlog / (1 - self.utilization) ** 2 / sqrt((backlog / (1 - self.utilization)) ** 2 + (1.5 * self.smooth_[0]) ** 2)
-        
-    def _update_params(self, XX, zz, x0, method='dogleg'):        
-        grad_LL = lambda y: -self.dtheta_dbacklog(y) * self._derivative_complete_likelihood(XX, zz, self._mode(y), self.smooth_[0])[0]
-        LL = lambda y: -self._complete_likelihood(XX, zz, self._mode(y), self.smooth_[0])
-        res = minimize(fun=LL, method=method, x0=x0, jac=grad_LL)
-        return res['x']
+        return backlog / (1 - self.utilization) ** 2 / sqrt((backlog / (1 - self.utilization)) ** 2 + (1.5 * self.cv_[0]) ** 2)
+
+    def d2theta_dbacklog2(self, backlog):
+        return (1.5 * self.cv_[0]) ** 2 * (1 - self.utilization) / (
+                backlog ** 2 + (1.5 * self.cv_[0] * (1 - self.utilization)) ** 2) ** 1.5
+
+    def _update_params(self, XX, zz, x0, method='dogleg'):
+        hess_LL = lambda y: -self.d2theta_dbacklog2(y) * \
+                            self._derivative_complete_likelihood(XX, zz, self._mode(y), self.cv_[0])[
+                                0] - self.dtheta_dbacklog(y) ** 2 * \
+                            self._second_derivative_complete_likelihood(XX, zz, self._mode(y), self.cv_[0])[0, 0]
+        grad_LL = lambda y: -self.dtheta_dbacklog(y) * \
+                            self._derivative_complete_likelihood(XX, zz, self._mode(y), self.cv_[0])[0]
+        LL = lambda y: -self._complete_likelihood(XX, zz, self._mode(y), self.cv_[0])
+        if method == 'dogleg':
+            res = minimize(fun=LL, method=method, x0=x0, jac=grad_LL, hess=hess_LL)['x']
+        elif method == 'BFGS':
+            res = minimize(fun=LL, method=method, x0=x0, jac=grad_LL)['x']
+        elif method == 'minimize_scalar':
+            res = minimize_scalar(LL).x
+        elif method == 'newton':
+            res = root_scalar(grad_LL, x0=x0, fprime=hess_LL, method='newton').root
+        return res
 
     def initialize(self, X, method='kmeans'):
         if method == 'kmeans':
@@ -50,10 +66,10 @@ class RTInvGaussMixture(rInvGaussMixtureCore):
             self.weights_ = np.mean(z, axis=0).tolist()
 
         self.modes_ = kmeans.cluster_centers_.reshape(-1)
-        self.backlog_ = [self._backlog(m, self.smooth_[0]) for m in self.modes_]
+        self.backlog_ = [self._backlog(m, self.cv_[0]) for m in self.modes_]
 
-        if self.smooth_ is None:
-            self.smooth_ = [1.]
+        if self.cv_ is None:
+            self.cv_ = [1.]
 
     def _M_step(self, X, z, method='dogleg'):
         # M-step
@@ -65,7 +81,7 @@ class RTInvGaussMixture(rInvGaussMixtureCore):
 
     def get_parameters(self):
         return {'weights': self.weights_, 'modes': self.modes_, 'backlog': self.backlog_,
-                'smooth': self.smooth_[0], 'n_components': self._n_components}
+                'cv': self.cv_[0], 'n_components': self._n_components}
 
 
 if __name__ == '__main__':
@@ -107,8 +123,8 @@ if __name__ == '__main__':
     n_components = 2
     n_task = 30
     sample = pd.read_csv('data/task_{}.csv'.format(n_task))["0"].astype(float)
-    rIG = RTInvGaussMixture(n_components=n_components, smooth_init=gamma[n_task],
-                            utilization=U[n_task]).fit(sample, method='BFGS')
+    rIG = RTInvGaussMixture(n_components=n_components, cv_init=gamma[n_task-1],
+                            utilization=U[n_task-1]).fit(sample, method='BFGS')
     print(rIG.get_parameters())
     plt.hist(sample, density=True, bins=50, color='black')
     t_range = np.linspace(0.1, max(sample))

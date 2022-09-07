@@ -6,48 +6,48 @@ from tqdm import trange
 
 class rInvGauss:
 
-    def __init__(self, theta=None, gamma=None, tol=1e-4, max_iter=100, verbose=False):
-        self.theta = theta
-        self.gamma = gamma
+    def __init__(self, mode=None, cv=None, tol=1e-4, max_iter=100, verbose=False):
+        self.mode = mode
+        self.cv = cv
         self.n_iter = max_iter
         self.tol = tol
         self.verbose = verbose
         self.converged_ = False
 
-    def _mu(self, theta, gamma):
-        return sqrt(theta * (3 * gamma + theta))
+    def _mean(self, mode, cv):
+        return sqrt(mode * (3 * cv + mode))
 
-    def _lambd(self, theta, gamma):
-        return theta * (3 * gamma + theta) / gamma
+    def _shape(self, mode, cv):
+        return mode * (3 * cv + mode) / cv
 
-    def _theta(self, mu, lambd):
-        return mu * (sqrt(1 + (1.5 * mu / lambd) ** 2) - 1.5 * mu / lambd)
+    def _mode(self, mean, shape):
+        return mean * (sqrt(1 + (1.5 * mean / shape) ** 2) - 1.5 * mean / shape)
 
-    def _gamma(self, mu, lambd):
-        return mu ** 2 / lambd
+    def _cv(self, mean, shape):
+        return mean ** 2 / shape
 
     def _checkvalues(self):
-        if self.theta <= 0 or self.gamma <= 0:
+        if self.mode <= 0 or self.cv <= 0:
             raise ValueError(
-                'theta = {} and gamma = {} must be positive'.format(self.theta, self.gamma)
+                'mode = {} and cv = {} must be positive'.format(self.mode, self.cv)
             )
 
     @property
-    def mu(self):
-        return self._mu(self.theta, self.gamma)
+    def mean(self):
+        return self._mean(self.mode, self.cv)
 
     @property
-    def lambd(self):
-        return self._lambd(self.theta, self.gamma)
+    def shape(self):
+        return self._shape(self.mode, self.cv)
 
     def pdf(self, x, theta=None, gamma=None):
         self._checkvalues()
         if theta and gamma:  # In case we want to use only the pdf without the object parameters
-            mu = self._mu(theta, gamma)
-            lambd = self._lambd(theta, gamma)
+            mu = self._mean(theta, gamma)
+            lambd = self._shape(theta, gamma)
         else:  # in case we use the object parameters
-            mu = self.mu
-            lambd = self.lambd
+            mu = self.mean
+            lambd = self.shape
         a1 = sqrt(lambd / (2 * numpy.pi * x ** 3))
         a2 = lambd * (x - mu) ** 2 / (x * mu ** 2)
         return a1 * exp(-a2 / 2)
@@ -55,11 +55,11 @@ class rInvGauss:
     def log_pdf(self, x, theta=None, gamma=None):
         self._checkvalues()
         if theta and gamma:  # In case we want to use only the pdf without the object parameters
-            mu = self._mu(theta, gamma)
-            lambd = self._lambd(theta, gamma)
+            mu = self._mean(theta, gamma)
+            lambd = self._shape(theta, gamma)
         else:  # in case we use the object parameters
-            mu = self.mu
-            lambd = self.lambd
+            mu = self.mean
+            lambd = self.shape
         a1 = log(lambd) - log(2) - log(numpy.pi) - 3 * log(x)
         a2 = lambd * (x - mu) ** 2 / (x * mu ** 2)
         return a1 / 2 - a2 / 2
@@ -69,8 +69,8 @@ class rInvGauss:
         if theta and gamma:
             pass
         else:
-            theta = self.theta
-            gamma = self.gamma
+            theta = self.mode
+            gamma = self.cv
         p = 3 * gamma + theta
         dLL_dtheta = - 1.5 / x \
                      - theta / (x * gamma) \
@@ -90,8 +90,8 @@ class rInvGauss:
         if theta and gamma:
             pass
         else:
-            theta = self.theta
-            gamma = self.gamma
+            theta = self.mode
+            gamma = self.cv
         p = 3 * gamma + theta
         dLL_dtheta2 = -0.25 * (4 / (x * gamma) + 2 / (theta ** 2) + 2 / (p ** 2) + 9 * gamma / sqrt(theta * p) ** 3)
         dLL_dgamma2 = -x / (gamma ** 3) \
@@ -121,10 +121,10 @@ class rInvGauss:
     def fit(self, XX):
         X = numpy.array(XX).copy()
 
-        if self.theta is None:
-            self.theta = numpy.mean(X)
-        if self.gamma is None:
-            self.gamma = 1.
+        if self.mode is None:
+            self.mode = numpy.mean(X)
+        if self.cv is None:
+            self.cv = 1.
 
         l2 = self.score(X)
         max_iter = self.n_iter
@@ -134,7 +134,7 @@ class rInvGauss:
         for _ in pbar:
             l0 = l1
             l1 = l2
-            self.theta, self.gamma = self._update_params(X, numpy.array((self.theta, self.gamma)))
+            self.mode, self.cv = self._update_params(X, numpy.array((self.mode, self.cv)))
             l2 = self.score(X)
             aitken_acceleration = (l2 - l1) / (l1 - l0) if abs(l1 - l0) > 0 else 0
             l1_inf = l2_inf
@@ -153,7 +153,7 @@ class rInvGauss:
         if gamma:
             pass
         else:
-            gamma = self.gamma
+            gamma = self.cv
         return lambda t: numpy.mean([self.pdf(t, x, gamma) for x in X])
 
     def sample(self, n_sample=1):
@@ -164,20 +164,20 @@ class rInvGauss:
 
         # https://fr.wikipedia.org/wiki/Loi_inverse-gaussienne#Simulation_num%C3%A9rique_de_la_loi_inverse-gaussienne
         y = numpy.random.normal(size=n_sample) ** 2
-        X = self.mu + (
-                    self.mu ** 2 * y - self.mu * numpy.sqrt(4 * self.mu * self.lambd * y + self.mu ** 2 * y ** 2)) / (
-                        2 * self.lambd)
+        X = self.mean + (
+                self.mean ** 2 * y - self.mean * numpy.sqrt(4 * self.mean * self.shape * y + self.mean ** 2 * y ** 2)) / (
+                        2 * self.shape)
         U = numpy.random.rand(n_sample)
         S = numpy.zeros(n_sample)
-        Z = self.mu / (self.mu + X)
+        Z = self.mean / (self.mean + X)
         ok = (U <= Z)
         notok = (U > Z)
         S[ok] = X[ok]
-        S[notok] = self.mu ** 2 / X[notok]
+        S[notok] = self.mean ** 2 / X[notok]
         return S
 
     def get_parameters(self):
-        return {'mode': self.theta, 'shape': self.gamma}
+        return {'mode': self.mode, 'smooth': self.cv}
 
 
 if __name__ == '__main__':
@@ -186,9 +186,9 @@ if __name__ == '__main__':
     import os
     from scipy.stats import invgauss
 
-    sample = rInvGauss(theta=10, gamma=4.0).sample(100000)
+    sample = rInvGauss(mode=10, cv=4.0).sample(1000)
 
-    rIG1 = rInvGauss(gamma=4.0).fit(sample)
+    rIG1 = rInvGauss(cv=4.0).fit(sample)
     rIG2 = rInvGauss(max_iter=500).fit(sample)
 
     print(rIG1.get_parameters())
@@ -202,11 +202,3 @@ if __name__ == '__main__':
     plt.legend()
     plt.title('A generated sample with MLE')
     plt.show()
-    # plt.hist(sample, density=True, bins=50)
- t_range = numpy.linspace(0.1, max(sample))
-#
- kernel_t_range = [rIG.kde(sample)(tt) for tt in t_range]
- plt.plot(t_range, kernel_t_range, color='red')
-# plt.ylim(0, 0.8)
-# plt.title('A generated sample with kde')
-# plt.show()

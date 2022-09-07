@@ -9,7 +9,7 @@ import abc
 class rInvGaussMixtureCore:
 
     def __init__(self, n_components, max_iter=100, tol=1e-4, modes_init=None,
-                 smooth_init=None, weights_init=None, verbose=False):
+                 cv_init=None, weights_init=None, verbose=False):
         self.tol = tol
         self.n_iter_ = max_iter
         self.verbose = verbose
@@ -22,12 +22,12 @@ class rInvGaussMixtureCore:
             assert len(modes_init) == self._n_components, 'Modes lengths should be equal to n_components'
 
         self.modes_ = modes_init
-        self.smooth_ = smooth_init
+        self.cv_ = cv_init
         self.weights_ = weights_init
         self.converged_ = False
 
     def _proba_components(self, x):
-        return [pi_j * rInvGauss(self.modes_[j], self.smooth_[j]).pdf(x) for j, pi_j in enumerate(self.weights_)]
+        return [pi_j * rInvGauss(self.modes_[j], self.cv_[j]).pdf(x) for j, pi_j in enumerate(self.weights_)]
 
     def pdf(self, x):
         return sum(self._proba_components(x))
@@ -53,13 +53,15 @@ class rInvGaussMixtureCore:
 
     def _score_complete(self, X, z):
         l1 = sum([sum([z[i, j] * log(pi_j) for j, pi_j in enumerate(self.weights_)]) for i, _ in enumerate(X)])
-        l2 = sum([sum([z[i, j] * rInvGauss(self.modes_[j], self.smooth_[j]).log_pdf(x_i)
+        l2 = sum([sum([z[i, j] * rInvGauss(self.modes_[j], self.cv_[j]).log_pdf(x_i)
                        for i, x_i in enumerate(X)]) for j in range(self._n_components)])
         return l1 + l2
 
     def score(self, X, y=None):
         return sum([log(self.pdf(x)) for x in X])
 
+    def likelihood(self, X):
+        return np.prod([self.pdf(x) for x in X])
     @abc.abstractmethod
     def initialize(self, X, method='kmeans'):
         pass
@@ -100,11 +102,11 @@ class rInvGaussMixtureCore:
                 pbar.set_description('acceleration = {}'.format(aitken_acceleration))
             print('Not converged...')
         elif self._n_components == 1:
-            uni = rInvGauss(theta=self.modes_[0] if self.modes_ else None,
-                            gamma=self.smooth_[0] if self.smooth_ else None,
+            uni = rInvGauss(mode=self.modes_[0] if self.modes_ else None,
+                            cv=self.cv_[0] if self.cv_ else None,
                             max_iter=self.n_iter_, tol=self.tol, verbose=self.verbose).fit(X)
-            self.modes_ = [uni.theta]
-            self.smooth_ = [uni.gamma]
+            self.modes_ = [uni.mode]
+            self.cv_ = [uni.cv]
             self.weights_ = [1.]
         return self
 
@@ -138,8 +140,8 @@ class rInvGaussMixtureCore:
         mu = np.zeros(n_sample)
         lambd = np.zeros(n_sample)
         for i, k in enumerate(clusters_):
-            mu[i] = rInvGauss(theta=self.modes_[k], gamma=self.smooth_[k]).mu
-            lambd[i] = rInvGauss(theta=self.modes_[k], gamma=self.smooth_[k]).lambd
+            mu[i] = rInvGauss(theta=self.modes_[k], gamma=self.cv_[k]).mean
+            lambd[i] = rInvGauss(theta=self.modes_[k], gamma=self.cv_[k]).shape
         y = np.random.normal(size=n_sample) ** 2
         X = mu + (mu ** 2 * y - mu * np.sqrt(4 * mu * lambd * y + mu ** 2 * y ** 2)) / (2 * lambd)
         U = np.random.rand(n_sample)
@@ -180,7 +182,7 @@ class rInvGaussMixture(rInvGaussMixtureCore):
             self.weights_ = np.mean(z, axis=0).tolist()
 
         self.modes_ = kmeans.cluster_centers_.reshape(-1)
-        if self.smooth_ is None:
+        if self.cv_ is None:
             self.smooth_ = [1.] * self._n_components
 
     def _M_step(self, X, z, method):
