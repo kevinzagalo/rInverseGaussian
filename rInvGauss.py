@@ -40,11 +40,11 @@ class rInvGauss:
     def shape(self):
         return self._shape(self.mode, self.cv)
 
-    def pdf(self, x, theta=None, gamma=None):
+    def pdf(self, x, mode=None, cv=None):
         self._checkvalues()
-        if theta and gamma:  # In case we want to use only the pdf without the object parameters
-            mu = self._mean(theta, gamma)
-            lambd = self._shape(theta, gamma)
+        if mode and cv:  # In case we want to use only the pdf without the object parameters
+            mu = self._mean(mode, cv)
+            lambd = self._shape(mode, cv)
         else:  # in case we use the object parameters
             mu = self.mean
             lambd = self.shape
@@ -93,7 +93,7 @@ class rInvGauss:
             mode = self.mode
             cv = self.cv
         p = 3 * cv + mode
-        dLL_dtheta2 = -0.25 * (4 / (x * cv) + 2 / (mode ** 2) + 2 / (p ** 2) + 9 * cv / sqrt(mode * p) ** 3)
+        dLL_dmu2 = -0.25 * (4 / (x * cv) + 2 / (mode ** 2) + 2 / (p ** 2) + 9 * cv / sqrt(mode * p) ** 3)
         dLL_dgamma2 = -x / (cv ** 3) \
                       - mode ** 2 / (x * cv ** 3) \
                       + 1.5 * mode / (cv * p ** 2) \
@@ -101,12 +101,12 @@ class rInvGauss:
                       + mode / (2 * cv ** 2 * p) \
                       - 3 * sqrt(mode) / (cv ** 2 * sqrt(p)) \
                       + 2 * sqrt(mode * p) / cv ** 3
-        dLL_dtheta_dgamma = mode / (x * cv ** 2) \
+        dLL_dmu_dgamma = mode / (x * cv ** 2) \
                             - (27 * cv ** 3 + 30 * cv * mode ** 2 \
                                + 4 * mode ** 3 \
                                + 3 * cv ** 2 * (21 * mode + 2 * sqrt(mode * p))) \
                             / (4 * cv ** 2 * sqrt(mode * p ** 5))
-        return numpy.matrix([[dLL_dtheta2, dLL_dtheta_dgamma], [dLL_dtheta_dgamma, dLL_dgamma2]])
+        return numpy.matrix([[dLL_dmu2, dLL_dmu_dgamma], [dLL_dmu_dgamma, dLL_dgamma2]])
 
     def score(self, X, y=None, mode=None, cv=None):
         return sum([self.log_pdf(x, mode, cv) for x in X])
@@ -149,12 +149,12 @@ class rInvGauss:
         print('Not converged...')
         return self
 
-    def kde(self, X, gamma=None):
-        if gamma:
+    def kde(self, X, cv=None):
+        if cv:
             pass
         else:
-            gamma = self.cv
-        return lambda t: numpy.mean([self.pdf(t, x, gamma) for x in X])
+            cv = self.cv
+        return lambda t: numpy.mean([self.pdf(t, x, cv) for x in X])
 
     def sample(self, n_sample=1):
         if n_sample < 1:
@@ -196,8 +196,8 @@ if __name__ == '__main__':
 
     plt.hist(sample, density=True, bins=50, color='black')
     t_range = numpy.linspace(0.1, max(sample))
-    plt.plot(t_range, rIG1.pdf(t_range), color='red', label='gamma fixed')
-    plt.plot(t_range, rIG2.pdf(t_range), color='blue', label='gamma not fixed')
+    plt.plot(t_range, rIG1.pdf(t_range), color='red', label='cv fixed')
+    plt.plot(t_range, rIG2.pdf(t_range), color='blue', label='cv not fixed')
     # plt.ylim(0, 0.8)
     plt.legend()
     plt.title('A generated sample with MLE')
