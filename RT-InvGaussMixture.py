@@ -124,7 +124,7 @@ if __name__ == '__main__':
     n_task = 30
     sample = pd.read_csv('data/task_{}.csv'.format(n_task))["0"].astype(float)
     rIG = RTInvGaussMixture(n_components=n_components, cv_init=gamma[n_task-1],
-                            utilization=U[n_task-1]).fit(sample, method='BFGS')
+                            utilization=U[n_task-1]).fit(sample, method='minimize_scalar')
     print(rIG.get_parameters())
     plt.hist(sample, density=True, bins=50, color='black')
     t_range = np.linspace(0.1, max(sample))
@@ -134,6 +134,8 @@ if __name__ == '__main__':
     plt.legend()
     plt.title('A generated sample with MLE')
     plt.show()
+
+    rIG.ks_test()
 
 
     # for f in os.listdir('data'):

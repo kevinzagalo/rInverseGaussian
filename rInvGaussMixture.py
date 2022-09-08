@@ -5,6 +5,7 @@ from tqdm import trange
 from rInvGauss import rInvGauss
 from sklearn.cluster import KMeans
 import abc
+from scipy.stats import kstest
 
 class rInvGaussMixtureCore:
 
@@ -25,6 +26,7 @@ class rInvGaussMixtureCore:
         self.cv_ = cv_init
         self.weights_ = weights_init
         self.converged_ = False
+        self.fitted_ = False
 
     def _proba_components(self, x):
         return [pi_j * rInvGauss(self.modes_[j], self.cv_[j]).pdf(x) for j, pi_j in enumerate(self.weights_)]
@@ -111,6 +113,7 @@ class rInvGaussMixtureCore:
         return self
 
     def fit(self, X, y=None, verbose=False, method='dogleg'):
+        self.fitted_ = True
         return self._EM(X, verbose=verbose, method=method)
 
     def aic(self, X):
@@ -158,6 +161,16 @@ class rInvGaussMixtureCore:
     def get_parameters(self):
         pass
 
+    def ks_test(self, sample):
+        y = self.fit_predict(sample)
+        for k in range(self._n_components):
+            sample0 = np.array(sample)[np.array(y) == k]
+            mean = rInvGauss()._mean(self.modes_[k], self.cv_[k])
+            shape = rInvGauss()._shape(self.modes_[k], self.cv_[k])
+            chi = shape * (sample0 - mean) ** 2 / (mean ** 2 * sample0)
+            print(f'Component {k} :')
+            print(kstest(chi, 'chi2', args=(1,)))
+
 
 class rInvGaussMixture(rInvGaussMixtureCore):
     def __init__(self, n_components, max_iter=100, tol=1e-4, modes_init=None,
@@ -202,23 +215,24 @@ if __name__ == '__main__':
     import pandas as pd
     import os
 
-    sample = rInvGaussMixture(n_components=2, weights_init=[0.3, 0.7], modes_init=[10, 100],
+    n = 2
+    sample = rInvGaussMixture(n_components=n, weights_init=[0.3, 0.7], modes_init=[10, 100],
                               cv_init=[1, 4.0]).sample(1000)
 
-    rIG1 = rInvGaussMixture(n_components=2, cv_init=[1, 4.0]).fit(sample)
-    rIG2 = rInvGaussMixture(n_components=2).fit(sample)
+    rIG = rInvGaussMixture(n_components=n)
+    rIG.ks_test(sample)
 
-    print(rIG1.get_parameters())
-    print(rIG2.get_parameters())
-
-    plt.hist(sample, density=True, bins=50, color='black')
-    t_range = np.linspace(0.1, max(sample))
-    plt.plot(t_range, rIG1.pdf(t_range), color='red', label='gamma fixed')
-    plt.plot(t_range, rIG2.pdf(t_range), color='blue', label='gamma not fixed')
-    # plt.ylim(0, 0.8)
-    plt.legend()
-    plt.title('A generated sample with MLE')
-    plt.show()
+    #print(rIG1.get_parameters())
+    #print(rIG2.get_parameters())
+#
+    #plt.hist(sample, density=True, bins=50, color='black')
+    #t_range = np.linspace(0.1, max(sample))
+    #plt.plot(t_range, rIG1.pdf(t_range), color='red', label='gamma fixed')
+    #plt.plot(t_range, rIG2.pdf(t_range), color='blue', label='gamma not fixed')
+    ## plt.ylim(0, 0.8)
+    #plt.legend()
+    #plt.title('A generated sample with MLE')
+    #plt.show()
 
 
     # for f in os.listdir('data'):
