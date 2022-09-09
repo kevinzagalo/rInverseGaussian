@@ -135,7 +135,7 @@ if __name__ == '__main__':
     plt.title('A generated sample with MLE')
     plt.show()
 
-    rIG.ks_test()
+    rIG.ks_test(sample)
 
 
     # for f in os.listdir('data'):
