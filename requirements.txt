@@ -1,0 +1,5 @@
+numpy
+statsmodels
+scipy
+tqdm
+scikit-learn
