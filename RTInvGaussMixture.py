@@ -73,7 +73,7 @@ class RTInvGaussMixture(rInvGaussMixture):
         # M-step
         self.weights_ = np.mean(z, axis=0).tolist()
         for j in range(self._n_components):
-            self.backlog_[j] = self._update_params(X, z[:, j], self.backlog_[j], method=method)
+            self.backlog_[j] = self._update_params(X, z[:, j], self.backlog_[j], method=method)[0]
             self.modes_[j] = self._mode(self.backlog_[j])
         return 0
 
@@ -85,7 +85,7 @@ class RTInvGaussMixture(rInvGaussMixture):
 
     def get_parameters(self):
         if self._n_components > 1:
-            return {'weights': self.weights_, 'modes': self.modes_, 'backlog': self.backlog_,
+            return {'weights': tuple(self.weights_), 'modes': tuple(self.modes_), 'backlog': tuple(self.backlog_),
                    'cv': self.cv_[0], 'n_components': self._n_components}
         else:
             return {'weights': self.weights_[0], 'modes': self.modes_[0], 'backlog': self.backlog_[0],
