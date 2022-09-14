@@ -1,13 +1,13 @@
 import numpy as np
-from math import sqrt, log, exp
+from math import log
 from scipy.optimize import minimize, fmin_bfgs
 from tqdm import trange
-from rInvGauss import rInvGauss
+from rInverseGaussian.rInvGauss import rInvGauss
 from sklearn.cluster import KMeans
-import abc
 from scipy.stats import kstest
 
-class rInvGaussMixtureCore:
+
+class rInvGaussMixture:
 
     def __init__(self, n_components, max_iter=100, tol=1e-4, modes_init=None,
                  cv_init=None, weights_init=None, verbose=False):
@@ -49,10 +49,6 @@ class rInvGaussMixtureCore:
             zz[i, :] = np.array(self._proba_components(x_i)) / self.pdf(x_i)
         return zz
 
-    @abc.abstractmethod
-    def _update_params(self, XX, zz, x0):
-        pass
-
     def _score_complete(self, X, z):
         l1 = sum([sum([z[i, j] * log(pi_j) for j, pi_j in enumerate(self.weights_)]) for i, _ in enumerate(X)])
         l2 = sum([sum([z[i, j] * rInvGauss(self.modes_[j], self.cv_[j]).log_pdf(x_i)
@@ -64,13 +60,6 @@ class rInvGaussMixtureCore:
 
     def likelihood(self, X):
         return np.prod([self.pdf(x) for x in X])
-    @abc.abstractmethod
-    def initialize(self, X, method='kmeans'):
-        pass
-
-    @abc.abstractmethod
-    def _M_step(self, X, z, method):
-        pass
 
     def _EM(self, XX, verbose=False, method='dogleg'):
         assert all([xx > 0 for xx in XX]), "non-positive value"
@@ -120,7 +109,7 @@ class rInvGaussMixtureCore:
         return 2 * len(X) * self.score(X) - (3 * self._n_components - 1) * 2
 
     def bic(self, X):
-        return 2 * len(X) * self.score(X) - (3 * self._n_components - 1) * np.log(len(X))
+        return 2 * self.score(X) - (3 * self._n_components - 1) * np.log(len(X))
 
     def predict_proba(self, X):
         return [self._proba_components(x) for x in X]
@@ -157,10 +146,6 @@ class rInvGaussMixtureCore:
         S[notok] = mu[notok] ** 2 / X[notok]
         return S
 
-    @abc.abstractmethod
-    def get_parameters(self):
-        pass
-
     def ks_test(self, sample):
         y = self.fit_predict(sample)
         for k in range(self._n_components):
@@ -170,13 +155,6 @@ class rInvGaussMixtureCore:
             chi = shape * (sample0 - mean) ** 2 / (mean ** 2 * sample0)
             print(f'Component {k} :')
             print(kstest(chi, 'chi2', args=(1,)))
-
-
-class rInvGaussMixture(rInvGaussMixtureCore):
-    def __init__(self, n_components, max_iter=100, tol=1e-4, modes_init=None,
-                 cv_init=None, weights_init=None, verbose=False):
-        super().__init__(n_components=n_components, tol=tol, max_iter=max_iter, modes_init=modes_init,
-                         weights_init=weights_init, verbose=verbose, cv_init=cv_init)
 
     def _update_params(self, XX, zz, x0, method='dogleg'):
         hess_LL = lambda x: -self._second_derivative_complete_likelihood(XX, zz, x[0], x[1])

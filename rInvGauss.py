@@ -178,27 +178,3 @@ class rInvGauss:
 
     def get_parameters(self):
         return {'mode': self.mode, 'cv': self.cv}
-
-
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    import pandas as pd
-    import os
-    from scipy.stats import invgauss
-
-    sample = rInvGauss(mode=10, cv=4.0).sample(1000)
-
-    rIG1 = rInvGauss(cv=4.0).fit(sample)
-    rIG2 = rInvGauss(max_iter=500).fit(sample)
-
-    print(rIG1.get_parameters())
-    print(rIG2.get_parameters())
-
-    plt.hist(sample, density=True, bins=50, color='black')
-    t_range = numpy.linspace(0.1, max(sample))
-    plt.plot(t_range, rIG1.pdf(t_range), color='red', label='cv fixed')
-    plt.plot(t_range, rIG2.pdf(t_range), color='blue', label='cv not fixed')
-    # plt.ylim(0, 0.8)
-    plt.legend()
-    plt.title('A generated sample with MLE')
-    plt.show()

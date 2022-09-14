@@ -1,13 +1,11 @@
 import numpy as np
 from math import sqrt, log, exp
 from scipy.optimize import minimize, fmin_bfgs, minimize_scalar, root_scalar
-from tqdm import trange
-from rInvGauss import rInvGauss
-from rInvGaussMixture import rInvGaussMixtureCore, rInvGaussMixture
+from rInverseGaussian.rInvGaussMixture import rInvGaussMixture
 from sklearn.cluster import KMeans
 
 
-class RTInvGaussMixture(rInvGaussMixtureCore):
+class RTInvGaussMixture(rInvGaussMixture):
 
     def __init__(self, n_components, cv_init, max_iter=100, tol=1e-4, modes_init=None,
                  weights_init=None, verbose=False, utilization=None):
@@ -78,6 +76,12 @@ class RTInvGaussMixture(rInvGaussMixtureCore):
             self.backlog_[j] = self._update_params(X, z[:, j], self.backlog_[j], method=method)
             self.modes_[j] = self._mode(self.backlog_[j])
         return 0
+
+    def aic(self, X):
+        return 2 * len(X) * self.score(X) - (2 * self._n_components - 1) * 2
+
+    def bic(self, X):
+        return 2 * self.score(X) - (2 * self._n_components - 1) * np.log(len(X))
 
     def get_parameters(self):
         return {'weights': self.weights_, 'modes': self.modes_, 'backlog': self.backlog_,
