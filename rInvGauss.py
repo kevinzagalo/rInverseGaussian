@@ -26,12 +26,6 @@ class rInvGauss:
     def _cv(self, mean, shape):
         return mean ** 2 / shape
 
-    def _checkvalues(self):
-        if self.mode <= 0 or self.cv <= 0:
-            raise ValueError(
-                'mode = {} and cv = {} must be positive'.format(self.mode, self.cv)
-            )
-
     @property
     def mean(self):
         return self._mean(self.mode, self.cv)
@@ -41,7 +35,6 @@ class rInvGauss:
         return self._shape(self.mode, self.cv)
 
     def pdf(self, x, mode=None, cv=None):
-        self._checkvalues()
         if mode and cv:  # In case we want to use only the pdf without the object parameters
             mu = self._mean(mode, cv)
             lambd = self._shape(mode, cv)
@@ -53,7 +46,6 @@ class rInvGauss:
         return a1 * exp(-a2 / 2)
 
     def log_pdf(self, x, mode=None, cv=None):
-        self._checkvalues()
         if mode and cv:  # In case we want to use only the pdf without the object parameters
             mu = self._mean(mode, cv)
             lambd = self._shape(mode, cv)
@@ -65,7 +57,6 @@ class rInvGauss:
         return a1 / 2 - a2 / 2
 
     def _dlogf(self, x, mode=None, cv=None):
-        self._checkvalues()
         if mode and cv:
             pass
         else:
@@ -86,7 +77,6 @@ class rInvGauss:
         return numpy.array([dLL_dmu, dLL_dgamma])
 
     def _hesslogf(self, x, mode=None, cv=None):
-        self._checkvalues()
         if mode and cv:
             pass
         else:

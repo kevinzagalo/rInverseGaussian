@@ -7,7 +7,7 @@ from sklearn.cluster import KMeans
 
 class RTInvGaussMixture(rInvGaussMixture):
 
-    def __init__(self, n_components, cv_init, max_iter=100, tol=1e-4, modes_init=None,
+    def __init__(self, n_components, cv_init, max_iter=100, tol=1e-4, modes_init=None, backlog_init=None,
                  weights_init=None, verbose=False, utilization=None):
 
         super().__init__(n_components=n_components, tol=tol, max_iter=max_iter, modes_init=modes_init,
@@ -17,10 +17,9 @@ class RTInvGaussMixture(rInvGaussMixture):
         if cv_init is not None and (isinstance(cv_init, int) or isinstance(cv_init, float)):
             self.cv_ = [cv_init] * n_components
 
+        self.backlog_ = backlog_init
         if cv_init and modes_init:
             self.backlog_ = [self._backlog(m, cv_init) for m in modes_init]
-        else:
-            self.backlog_ = None
 
     def _mode(self, backlog=None):
         return sqrt((backlog / (1 - self.utilization)) ** 2 + (1.5 * self.cv_[0]) ** 2) - 1.5 * self.cv_[0]
@@ -51,7 +50,12 @@ class RTInvGaussMixture(rInvGaussMixture):
             res = minimize_scalar(LL).x
         elif method == 'newton':
             res = root_scalar(grad_LL, x0=x0, fprime=hess_LL, method='newton').root
-        return res
+        else:
+            raise("method unknown. Try 'dogleg', 'BFGS', 'minimize_scalar' or 'newton'.")
+        if isinstance(res, list):
+            return res[0]
+        else:
+            return res
 
     def initialize(self, X, method='kmeans'):
         if method == 'kmeans':
@@ -72,8 +76,9 @@ class RTInvGaussMixture(rInvGaussMixture):
     def _M_step(self, X, z, method='dogleg'):
         # M-step
         self.weights_ = np.mean(z, axis=0).tolist()
+        self.backlog_ = np.array(self.backlog_).T
         for j in range(self._n_components):
-            self.backlog_[j] = self._update_params(X, z[:, j], self.backlog_[j], method=method)[0]
+            self.backlog_[j] = self._update_params(X, z[:, j], self.backlog_[j], method=method)
             self.modes_[j] = self._mode(self.backlog_[j])
         return 0
 
@@ -84,9 +89,5 @@ class RTInvGaussMixture(rInvGaussMixture):
         return 2 * self.score(X) - (2 * self._n_components - 1) * np.log(len(X))
 
     def get_parameters(self):
-        if self._n_components > 1:
-            return {'weights': tuple(self.weights_), 'modes': tuple(self.modes_), 'backlog': tuple(self.backlog_),
-                   'cv': self.cv_[0], 'n_components': self._n_components}
-        else:
-            return {'weights': self.weights_[0], 'modes': self.modes_[0], 'backlog': self.backlog_[0],
-                   'cv': self.cv_[0], 'n_components': self._n_components}
+        return {'weights': tuple(self.weights_), 'modes': tuple(self.modes_), 'backlog': tuple(self.backlog_),
+                'utilization': self.utilization, 'cv': self.cv_[0], 'n_components': self._n_components}
