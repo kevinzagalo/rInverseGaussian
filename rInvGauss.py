@@ -96,47 +96,26 @@ class rInvGauss:
                                + 4 * mode ** 3 \
                                + 3 * cv ** 2 * (21 * mode + 2 * sqrt(mode * p))) \
                             / (4 * cv ** 2 * sqrt(mode * p ** 5))
-        return numpy.matrix([[dLL_dmu2, dLL_dmu_dgamma], [dLL_dmu_dgamma, dLL_dgamma2]])
+        try:
+            return numpy.matrix([[dLL_dmu2, dLL_dmu_dgamma], [dLL_dmu_dgamma, dLL_dgamma2]])
+        except:
+            print(mode, cv)
 
     def score(self, X, y=None, mode=None, cv=None):
         return sum([self.log_pdf(x, mode, cv) for x in X])
 
     def _update_params(self, XX, x0):
-        hess_LL = lambda y: sum([-self._hesslogf(x, y[0], y[1]) for x in XX])
+        #hess_LL = lambda y: sum([-self._hesslogf(x, y[0], y[1]) for x in XX])
         grad_LL = lambda y: numpy.array([-self._dlogf(x, y[0], y[1]) for x in XX]).sum(axis=0)
         LL = lambda y: -self.score(XX, mode=y[0], cv=y[1])
-        res = minimize(fun=LL, method='dogleg', x0=x0, jac=grad_LL, hess=hess_LL)['x']
+        res = minimize(fun=LL, method='BFGS', x0=x0, jac=grad_LL)['x']
         return res
 
     def fit(self, XX):
         X = numpy.array(XX).copy()
-
-        if self.mode is None:
-            self.mode = numpy.mean(X)
-        if self.cv is None:
-            self.cv = 1.
-
-        l2 = self.score(X)
-        max_iter = self.n_iter
-        l1 = 0
-        l2_inf = 0
-        pbar = trange(self.n_iter)
-        for _ in pbar:
-            l0 = l1
-            l1 = l2
-            self.mode, self.cv = self._update_params(X, numpy.array((self.mode, self.cv)))
-            l2 = self.score(X)
-            aitken_acceleration = (l2 - l1) / (l1 - l0) if abs(l1 - l0) > 0 else 0
-            l1_inf = l2_inf
-            l2_inf = l1 + (l2 - l1) / (1 - aitken_acceleration)
-            self.converged_ = abs(l2_inf - l1_inf) < self.tol
-            pbar.set_description('acceleration = {}'.format(aitken_acceleration))
-            if self.converged_:
-                if self.verbose:
-                    print('Converged in {} iterations'.format(self.n_iter - max_iter + 1))
-                return self
-            max_iter -= 1
-        print('Not converged...')
+        shape = 1/(1/X - 1/X.mean()).mean()
+        self.mode = self._mode(X.mean(), shape)
+        self.cv = X.mean()**2/shape
         return self
 
     def kde(self, X, cv=None):
@@ -168,3 +147,4 @@ class rInvGauss:
 
     def get_parameters(self):
         return {'mode': self.mode, 'cv': self.cv}
+
