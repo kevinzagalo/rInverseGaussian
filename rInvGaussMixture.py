@@ -2,7 +2,7 @@ import numpy as np
 from math import log
 from scipy.optimize import minimize, fmin_bfgs
 from tqdm import trange
-from .rInvGauss import rInvGauss
+from rInverseGaussian.rInvGauss import rInvGauss
 from sklearn.cluster import KMeans
 from scipy.stats import kstest
 
@@ -46,7 +46,7 @@ class rInvGaussMixture:
     def _update_weights(self, X):
         zz = np.zeros((len(X), self._n_components))
         for i, x_i in enumerate(X):
-             zz[i, :] = np.array(self._proba_components(x_i)).reshape(-1) / self.pdf(x_i)
+            zz[i, :] = np.array(self._proba_components(x_i)) / self.pdf(x_i)
         return zz
 
     def _score_complete(self, X, z):
@@ -61,48 +61,49 @@ class rInvGaussMixture:
     def likelihood(self, X):
         return np.prod([self.pdf(x) for x in X])
 
-    def _EM(self, X, verbose=False, method='dogleg'):
+    def _EM(self, XX, verbose=False, method='dogleg'):
+        assert all([xx > 0 for xx in XX]), "non-positive value"
+        X = np.array(XX).copy()
         self.initialize(X)
-        l2 = self.score(X)
-        max_iter = self.n_iter_
-        l1 = 0
-        l2_inf = 0
-        pbar = trange(self.n_iter_)
-        for _ in pbar:
-            max_iter -= 1
-            # E step
-            z = self._update_weights(X)
-            # M step
-            self._M_step(X, z, method)
-            # score
-            l0 = l1
-            l1 = l2
-            l2 = self.score(X)
-            aitken_acceleration = (l2 - l1) / (l1 - l0)
-            l1_inf = l2_inf
-            l2_inf = l1 + (l2 - l1) / (1 - aitken_acceleration)
-            self.converged_ = abs(l2_inf - l1_inf) < self.tol
-            if self.converged_:
-                if self.verbose or verbose:
-                    print('Converged in {} iterations'.format(self.n_iter_ - max_iter - 1))
-                return self
-            pbar.set_description('acceleration = {}'.format(aitken_acceleration))
-        print('Not converged...')
-        return self
-
-    def fit(self, X, y=None, verbose=False, method='dogleg'):
-        self.fitted_ = True
-        assert all([xx > 0 for xx in X]), "non-positive value"
-        XX = np.array(X).copy()
 
         if self._n_components > 1:
-            return self._EM(XX, verbose=verbose, method=method)
+            l2 = self.score(X)
+            max_iter = self.n_iter_
+            l1 = 0
+            l2_inf = 0
+            pbar = trange(self.n_iter_)
+            for _ in pbar:
+                max_iter -= 1
+                # E step
+                z = self._update_weights(X)
+                # M step
+                self._M_step(X, z, method)
+                # score
+                l0 = l1
+                l1 = l2
+                l2 = self.score(X)
+                aitken_acceleration = (l2 - l1) / (l1 - l0)
+                l1_inf = l2_inf
+                l2_inf = l1 + (l2 - l1) / (1 - aitken_acceleration)
+                self.converged_ = abs(l2_inf - l1_inf) < self.tol
+                if self.converged_:
+                    if self.verbose or verbose:
+                        print('Converged in {} iterations'.format(self.n_iter_ - max_iter - 1))
+                    return self
+                pbar.set_description('acceleration = {}'.format(aitken_acceleration))
+            print('Not converged...')
         elif self._n_components == 1:
-            uni = rInvGauss(max_iter=self.n_iter_, tol=self.tol, verbose=self.verbose).fit(X)
+            uni = rInvGauss(mode=self.modes_[0] if self.modes_ else None,
+                            cv=self.cv_[0] if self.cv_ else None,
+                            max_iter=self.n_iter_, tol=self.tol, verbose=self.verbose).fit(X)
             self.modes_ = [uni.mode]
             self.cv_ = [uni.cv]
             self.weights_ = [1.]
         return self
+
+    def fit(self, X, y=None, verbose=False, method='dogleg'):
+        self.fitted_ = True
+        return self._EM(X, verbose=verbose, method=method)
 
     def aic(self, X):
         return 2 * len(X) * self.score(X) - (3 * self._n_components - 1) * 2
@@ -186,3 +187,8 @@ class rInvGaussMixture:
         return {'weights': self.weights_, 'modes': self.modes_,
                 'cv': self.cv_, 'n_components': self._n_components}
 
+
+    def set_parameters(self, params):
+        self.weights_ = params['weights']
+        self.cv_ = params['cv']
+        self.modes_ = params['modes']

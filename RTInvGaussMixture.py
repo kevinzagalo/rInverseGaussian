@@ -1,8 +1,9 @@
 import numpy as np
 from math import sqrt, log, exp
 from scipy.optimize import minimize, fmin_bfgs, minimize_scalar, root_scalar
-from rInverseGaussian.rInvGaussMixture import rInvGaussMixture
+from simso.estimation.rInverseGaussian.rInvGaussMixture import rInvGaussMixture
 from sklearn.cluster import KMeans
+from .rInvGauss import rInvGauss
 
 
 class RTInvGaussMixture(rInvGaussMixture):
@@ -23,6 +24,10 @@ class RTInvGaussMixture(rInvGaussMixture):
 
     def _mode(self, backlog=None):
         return sqrt((backlog / (1 - self.utilization)) ** 2 + (1.5 * self.cv_[0]) ** 2) - 1.5 * self.cv_[0]
+
+    @property
+    def _means(self):
+        return [b / (1 - self.utilization) for b in self.backlog_]
 
     def _backlog(self, theta, gamma):
         return (1 - self.utilization) * sqrt(theta) * sqrt(theta + 3 * gamma)
@@ -82,6 +87,20 @@ class RTInvGaussMixture(rInvGaussMixture):
             self.modes_[j] = self._mode(self.backlog_[j])
         return 0
 
+    def fit(self, X, y=None, verbose=False, method='dogleg'):
+        self.fitted_ = True
+        assert all([xx > 0 for xx in X]), "non-positive value"
+        XX = np.array(X).copy()
+
+        if self._n_components > 1:
+            return self._EM(XX, verbose=verbose, method=method)
+        elif self._n_components == 1:
+            #uni = rInvGauss(max_iter=self.n_iter_, tol=self.tol, verbose=self.verbose).fit(X)
+            self.modes_ = [rInvGauss()._mode(X.mean(), X.mean()**2/self.cv_[0])]
+            self.backlog_ = [self._backlog(self.modes_[0], self.cv_[0])]
+            self.weights_ = [1.]
+        return self
+
     def aic(self, X):
         return 2 * len(X) * self.score(X) - (2 * self._n_components - 1) * 2
 
@@ -91,3 +110,4 @@ class RTInvGaussMixture(rInvGaussMixture):
     def get_parameters(self):
         return {'weights': tuple(self.weights_), 'modes': tuple(self.modes_), 'backlog': tuple(self.backlog_),
                 'utilization': self.utilization, 'cv': self.cv_[0], 'n_components': self._n_components}
+
