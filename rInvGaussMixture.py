@@ -37,6 +37,9 @@ class rInvGaussMixture:
     def cdf(self, x):
         return [pi_j * rInvGauss(self.modes_[j], self.cv_[j]).cdf(x) for j, pi_j in enumerate(self.weights_)]
 
+    def quantile(self, alpha, component):
+        return rInvGauss(self.modes_[component], self.cv_[component]).quantile(alpha)
+
     def _complete_likelihood(self, X, zz, mode, cv):
         return sum([zz[i] * rInvGauss(mode, cv).log_pdf(x_i) for i, x_i in enumerate(X)])
 
