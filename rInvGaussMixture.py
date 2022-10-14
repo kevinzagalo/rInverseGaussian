@@ -34,6 +34,9 @@ class rInvGaussMixture:
     def pdf(self, x):
         return sum(self._proba_components(x))
 
+    def cdf(self, x):
+        return [pi_j * rInvGauss(self.modes_[j], self.cv_[j]).cdf(x) for j, pi_j in enumerate(self.weights_)]
+
     def _complete_likelihood(self, X, zz, mode, cv):
         return sum([zz[i] * rInvGauss(mode, cv).log_pdf(x_i) for i, x_i in enumerate(X)])
 
@@ -192,3 +195,4 @@ class rInvGaussMixture:
         self.weights_ = params['weights']
         self.cv_ = params['cv']
         self.modes_ = params['modes']
+

@@ -172,3 +172,4 @@ class rInvGauss:
 
     def get_parameters(self):
         return {'mode': self.mode, 'cv': self.cv}
+
