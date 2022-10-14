@@ -50,7 +50,7 @@ class rInvGauss:
                + exp(2*self.mean/self.shape) * norm.cdf(-sqrt(self.shape/self.mean)*(1 / x/self.mean))
 
     def quantile(self, alpha):
-        return root_scalar(f=lambda x: self.cdf(x) - alpha, fprime=self.pdf)
+        return root_scalar(f=lambda x: self.cdf(x) - alpha, fprime=self.pdf).root
 
     def log_pdf(self, x, mode=None, cv=None):
         if mode and cv:  # In case we want to use only the pdf without the object parameters
