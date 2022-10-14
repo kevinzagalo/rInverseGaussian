@@ -1,8 +1,8 @@
 import numpy
 from numpy import sqrt, log, exp
-from scipy.optimize import minimize
+from scipy.optimize import minimize, root_scalar
 from tqdm import trange
-
+from scipy.stats import norm
 
 class rInvGauss:
 
@@ -44,6 +44,10 @@ class rInvGauss:
         a1 = sqrt(lambd / (2 * numpy.pi * x ** 3))
         a2 = lambd * (x - mu) ** 2 / (x * mu ** 2)
         return a1 * exp(-a2 / 2)
+
+    def cdf(self, x):
+        return norm.cdf(sqrt(self.shape * x) * (x*self.mean - 1)) \
+               + exp(2*self.mean/self.shape) * norm.cdf(-sqrt(self.shape/self.mean)*(1 / x/self.mean))
 
     def log_pdf(self, x, mode=None, cv=None):
         if mode and cv:  # In case we want to use only the pdf without the object parameters
