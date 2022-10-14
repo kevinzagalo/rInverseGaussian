@@ -190,9 +190,8 @@ class rInvGaussMixture:
         return 0
 
     def get_parameters(self):
-        return {'weights': self.weights_, 'modes': self.modes_,
-                'cv': self.cv_, 'n_components': self._n_components}
-
+        return {'weights': list(self.weights_), 'modes': list(self.modes_),
+                'cv': list(self.cv_), 'n_components': self._n_components}
 
     def set_parameters(self, params):
         self.weights_ = params['weights']
