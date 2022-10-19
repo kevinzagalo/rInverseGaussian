@@ -91,6 +91,7 @@ class RTInvGaussMixture(rInvGaussMixture):
         self.fitted_ = True
         assert all([xx > 0 for xx in X]), "non-positive value"
         XX = np.array(X).copy()
+        self.initialize(XX)
 
         if self._n_components > 1:
             return self._EM(XX, verbose=verbose, method=method)

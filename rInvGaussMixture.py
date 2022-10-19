@@ -67,49 +67,53 @@ class rInvGaussMixture:
     def likelihood(self, X):
         return np.prod([self.pdf(x) for x in X])
 
-    def _EM(self, XX, verbose=False, method='dogleg'):
-        assert all([xx > 0 for xx in XX]), "non-positive value"
-        X = np.array(XX).copy()
-        self.initialize(X)
-
-        if self._n_components > 1:
+    def _EM(self, X, verbose=False, method='dogleg'):
+        l2 = self.score(X)
+        max_iter = self.n_iter_
+        l1 = 0
+        l2_inf = 0
+        pbar = trange(self.n_iter_)
+        for _ in pbar:
+            max_iter -= 1
+            # E step
+            z = self._update_weights(X)
+            # M step
+            self._M_step(X, z, method)
+            # score
+            l0 = l1
+            l1 = l2
             l2 = self.score(X)
-            max_iter = self.n_iter_
-            l1 = 0
-            l2_inf = 0
-            pbar = trange(self.n_iter_)
-            for _ in pbar:
-                max_iter -= 1
-                # E step
-                z = self._update_weights(X)
-                # M step
-                self._M_step(X, z, method)
-                # score
-                l0 = l1
-                l1 = l2
-                l2 = self.score(X)
-                aitken_acceleration = (l2 - l1) / (l1 - l0)
-                l1_inf = l2_inf
-                l2_inf = l1 + (l2 - l1) / (1 - aitken_acceleration)
-                self.converged_ = abs(l2_inf - l1_inf) < self.tol
-                if self.converged_:
-                    if self.verbose or verbose:
-                        print('Converged in {} iterations'.format(self.n_iter_ - max_iter - 1))
-                    return self
-                pbar.set_description('acceleration = {}'.format(aitken_acceleration))
-            print('Not converged...')
-        elif self._n_components == 1:
-            uni = rInvGauss(mode=self.modes_[0] if self.modes_ else None,
-                            cv=self.cv_[0] if self.cv_ else None,
-                            max_iter=self.n_iter_, tol=self.tol, verbose=self.verbose).fit(X)
-            self.modes_ = [uni.mode]
-            self.cv_ = [uni.cv]
-            self.weights_ = [1.]
+            aitken_acceleration = (l2 - l1) / (l1 - l0)
+            l1_inf = l2_inf
+            l2_inf = l1 + (l2 - l1) / (1 - aitken_acceleration)
+            self.converged_ = abs(l2_inf - l1_inf) < self.tol
+            if self.converged_:
+                if self.verbose or verbose:
+                    print('Converged in {} iterations'.format(self.n_iter_ - max_iter - 1))
+                return self
+            pbar.set_description('acceleration = {}'.format(aitken_acceleration))
+        print('Not converged...')
+
         return self
 
     def fit(self, X, y=None, verbose=False, method='dogleg'):
         self.fitted_ = True
-        return self._EM(X, verbose=verbose, method=method)
+        assert all([xx > 0 for xx in X]), "non-positive value"
+        XX = np.array(X).copy()
+        self.initialize(XX)
+
+        if self._n_components > 1:
+            return self._EM(XX, verbose=verbose, method=method)
+        elif self._n_components == 1:
+            uni = rInvGauss(mode=self.modes_[0] if self.modes_ else None,
+                            cv=self.cv_[0] if self.cv_ else None,
+                            max_iter=self.n_iter_, tol=self.tol, verbose=self.verbose).fit(XX)
+            self.modes_ = [uni.mode]
+            self.cv_ = [uni.cv]
+            self.weights_ = [1.]
+            return self
+        else:
+            raise ValueError('n_component must be > 1')
 
     def aic(self, X):
         return 2 * len(X) * self.score(X) - (3 * self._n_components - 1) * 2
