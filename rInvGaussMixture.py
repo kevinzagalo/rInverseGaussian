@@ -72,7 +72,10 @@ class rInvGaussMixture:
         max_iter = self.n_iter_
         l1 = 0
         l2_inf = 0
-        pbar = trange(self.n_iter_)
+        if self.verbose or verbose:
+            pbar = trange(self.n_iter_)
+        else:
+            pbar = range(self.n_iter_)
         for _ in pbar:
             max_iter -= 1
             # E step
@@ -91,7 +94,8 @@ class rInvGaussMixture:
                 if self.verbose or verbose:
                     print('Converged in {} iterations'.format(self.n_iter_ - max_iter - 1))
                 return self
-            pbar.set_description('acceleration = {}'.format(aitken_acceleration))
+            if self.verbose or verbose:
+                pbar.set_description('acceleration = {}'.format(aitken_acceleration))
         print('Not converged...')
 
         return self
@@ -113,7 +117,7 @@ class rInvGaussMixture:
             self.weights_ = [1.]
             return self
         else:
-            raise ValueError('n_component must be > 1')
+            raise ValueError('n_component must be >= 1')
 
     def aic(self, X):
         return 2 * len(X) * self.score(X) - (3 * self._n_components - 1) * 2
