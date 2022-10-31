@@ -72,10 +72,8 @@ class rInvGaussMixture:
         max_iter = self.n_iter_
         l1 = 0
         l2_inf = 0
-        if self.verbose or verbose:
-            pbar = trange(self.n_iter_)
-        else:
-            pbar = range(self.n_iter_)
+        pbar = trange(self.n_iter_) if self.verbose or verbose else range(self.n_iter_)
+
         for _ in pbar:
             max_iter -= 1
             # E step
@@ -86,18 +84,21 @@ class rInvGaussMixture:
             l0 = l1
             l1 = l2
             l2 = self.score(X)
-            aitken_acceleration = (l2 - l1) / (l1 - l0)
-            l1_inf = l2_inf
-            l2_inf = l1 + (l2 - l1) / (1 - aitken_acceleration)
-            self.converged_ = abs(l2_inf - l1_inf) < self.tol
-            if self.converged_:
+            if l0 - l1 == 0:
+                continue
+            elif self.converged_:
                 if self.verbose or verbose:
                     print('Converged in {} iterations'.format(self.n_iter_ - max_iter - 1))
                 return self
+            else:
+                aitken_acceleration = (l2 - l1) / (l1 - l0)
+                l1_inf = l2_inf
+                l2_inf = l1 + (l2 - l1) / (1 - aitken_acceleration)
+                self.converged_ = abs(l2_inf - l1_inf) < self.tol
             if self.verbose or verbose:
                 pbar.set_description('acceleration = {}'.format(aitken_acceleration))
-        print('Not converged...')
-
+        if verbose or self.verbose:
+            print('Not converged...')
         return self
 
     def fit(self, X, y=None, verbose=False, method='dogleg'):
@@ -178,7 +179,7 @@ class rInvGaussMixture:
         return res
 
     def initialize(self, X, method=None):
-        kmeans = KMeans(self._n_components).fit(X.reshape(-1, 1))
+        kmeans = KMeans(self._n_components).fit(X.copy().reshape(-1, 1))
 
         z = np.zeros((len(X), self._n_components))
         if self.weights_ is None:

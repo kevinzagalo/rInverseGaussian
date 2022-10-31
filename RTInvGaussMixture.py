@@ -4,6 +4,7 @@ from scipy.optimize import minimize, fmin_bfgs, minimize_scalar, root_scalar
 from simso.estimation.rInverseGaussian.rInvGaussMixture import rInvGaussMixture
 from sklearn.cluster import KMeans
 from .rInvGauss import rInvGauss
+from scipy.stats import chi2
 
 
 class RTInvGaussMixture(rInvGaussMixture):
@@ -24,6 +25,16 @@ class RTInvGaussMixture(rInvGaussMixture):
 
     def _mode(self, backlog=None):
         return sqrt((backlog / (1 - self.utilization)) ** 2 + (1.5 * self.cv_[0]) ** 2) - 1.5 * self.cv_[0]
+
+    def normalize(self, x, y):
+        return (x - self._means[y]) ** 2 / (self.cv_[0] * x)
+
+    def dmp(self, deadline):
+        args = {'df': 1, 'loc': 0, 'scale': 1}
+        dmp_task = 0
+        for k in range(self._n_components):
+            dmp_task += self.weights_[k] * abs(int(deadline > self._means[k]) - chi2.cdf(self.normalize(deadline, k), **args))
+        return dmp_task
 
     @property
     def _means(self):
@@ -90,14 +101,14 @@ class RTInvGaussMixture(rInvGaussMixture):
     def fit(self, X, y=None, verbose=False, method='dogleg'):
         self.fitted_ = True
         assert all([xx > 0 for xx in X]), "non-positive value"
-        XX = np.array(X).copy()
+        XX = np.array(X).copy().reshape(-1)
         self.initialize(XX)
 
         if self._n_components > 1:
             return self._EM(XX, verbose=verbose, method=method)
         elif self._n_components == 1:
             #uni = rInvGauss(max_iter=self.n_iter_, tol=self.tol, verbose=self.verbose).fit(X)
-            self.modes_ = [rInvGauss()._mode(X.mean(), X.mean()**2/self.cv_[0])]
+            self.modes_ = [rInvGauss()._mode(XX.mean(), XX.mean()**2/self.cv_[0])]
             self.backlog_ = [self._backlog(self.modes_[0], self.cv_[0])]
             self.weights_ = [1.]
         return self

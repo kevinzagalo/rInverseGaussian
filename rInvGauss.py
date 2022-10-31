@@ -151,3 +151,15 @@ class rInvGauss:
     def get_parameters(self):
         return {'mode': self.mode, 'cv': self.cv}
 
+
+class RTInvGauss(rInvGauss):
+
+    def __init__(self, backlog=None, deviation=None, utilization=None, tol=1e-4, max_iter=100, verbose=False):
+        mean = backlog / (1 - utilization)
+        shape = backlog**2/deviation**2
+        cv = deviation**2 / (1-utilization)**2
+        mode = mean * (sqrt(1 + (1.5 * mean / shape) ** 2) - 1.5 * mean / shape)
+        super().__init__(mode=mode, cv=cv, tol=tol, max_iter=max_iter, verbose=verbose)
+        self.backlog = backlog
+        self.utilization = utilization
+        self.deviation = deviation
