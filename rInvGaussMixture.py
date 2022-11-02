@@ -4,7 +4,7 @@ from scipy.optimize import minimize, fmin_bfgs
 from tqdm import trange
 from rInverseGaussian.rInvGauss import rInvGauss
 from sklearn.cluster import KMeans
-from scipy.stats import kstest
+from scipy.stats import kstest, chi2
 
 
 class rInvGaussMixture:
@@ -28,6 +28,9 @@ class rInvGaussMixture:
         self.converged_ = False
         self.fitted_ = False
 
+    def _mean(self, k):
+        return np.sqrt(self.modes_[k] * (3 * self.cv_[k] + self.modes_[k]))
+
     def _proba_components(self, x):
         return [pi_j * rInvGauss(self.modes_[j], self.cv_[j]).pdf(x) for j, pi_j in enumerate(self.weights_)]
 
@@ -39,6 +42,16 @@ class rInvGaussMixture:
 
     def quantile(self, alpha, component):
         return rInvGauss(self.modes_[component], self.cv_[component]).quantile(alpha)
+
+    def normalize(self, x, y):
+        return (x - self._mean(y)) ** 2 / (self.cv_[0] * x)
+
+    def dmp(self, deadline):
+        args = {'df': 1, 'loc': 0, 'scale': 1}
+        dmp_task = 0
+        for k in range(self._n_components):
+            dmp_task += self.weights_[k] * abs(int(deadline > self._mean(k)) - chi2.cdf(self.normalize(deadline, k), **args))
+        return dmp_task
 
     def _complete_likelihood(self, X, zz, mode, cv):
         return sum([zz[i] * rInvGauss(mode, cv).log_pdf(x_i) for i, x_i in enumerate(X)])

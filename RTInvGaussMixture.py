@@ -26,9 +26,6 @@ class RTInvGaussMixture(rInvGaussMixture):
     def _mode(self, backlog=None):
         return sqrt((backlog / (1 - self.utilization)) ** 2 + (1.5 * self.cv_[0]) ** 2) - 1.5 * self.cv_[0]
 
-    def normalize(self, x, y):
-        return (x - self._means[y]) ** 2 / (self.cv_[0] * x)
-
     def dmp(self, deadline):
         args = {'df': 1, 'loc': 0, 'scale': 1}
         dmp_task = 0
